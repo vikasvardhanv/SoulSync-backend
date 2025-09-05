@@ -1,0 +1,320 @@
+// Prisma schema for SoulSync Dating App
+// Database: PostgreSQL (Vercel serverless compatible)
+
+generator client {
+  provider        = "prisma-client-js"
+  binaryTargets   = ["native", "debian-openssl-1.1.x", "debian-openssl-3.0.x"]
+  output          = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("PRISMA_DATABASE_URL")
+  schemas  = ["soulsync", "public"]
+}
+
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  password    String
+  name        String
+  age         Int?
+  bio         String?
+  location    String?
+  interests   String[]
+  photos      String[] // Array of image IDs
+  isVerified  Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  matchesInitiated    Match[]           @relation("UserMatchesInitiated")
+  matchesReceived     Match[]           @relation("UserMatchesReceived")
+  messagesSent        Message[]         @relation("MessageSender")
+  messagesReceived    Message[]         @relation("MessageReceiver")
+  answers             UserAnswer[]
+  subscriptions       Subscription[]
+  payments            Payment[]
+  refreshTokens       RefreshToken[]
+  profile             UserProfile?
+  matchPreference     MatchPreference?
+  blockedUsers        BlockedUser[]     @relation("UserBlocks")
+  blockedByUsers      BlockedUser[]     @relation("UserBlocked")
+  reportsMade         Report[]          @relation("UserReports")
+  reportsReceived     Report[]          @relation("UserReported")
+  images              Image[]
+
+  @@map("users")
+  @@schema("soulsync")
+}
+
+model Image {
+  id        String   @id @default(uuid())
+  filename  String
+  mimetype  String
+  size      Int
+  data      String   // Base64 encoded image data
+  userId    String?  @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([userId])
+  @@index([createdAt])
+  @@map("images")
+  @@schema("soulsync")
+}
+
+model Match {
+  id                 String   @id @default(uuid())
+  userInitiatorId    String   @map("user_initiator_id")
+  userReceiverId     String   @map("user_receiver_id")
+  compatibilityScore Float?   @map("compatibility_score")
+  status             String   @default("pending") // pending, accepted, rejected
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  userInitiator      User     @relation("UserMatchesInitiated", fields: [userInitiatorId], references: [id], onDelete: Cascade)
+  userReceiver       User     @relation("UserMatchesReceived", fields: [userReceiverId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@unique([userInitiatorId, userReceiverId])
+  @@index([userInitiatorId])
+  @@index([userReceiverId])
+  @@index([status])
+  @@map("matches")
+  @@schema("soulsync")
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  senderId   String   @map("sender_id")
+  receiverId String   @map("receiver_id")
+  content    String
+  isRead     Boolean  @default(false) @map("is_read")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  sender     User     @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver   User     @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([senderId, receiverId])
+  @@index([createdAt])
+  @@index([isRead])
+  @@map("messages")
+  @@schema("soulsync")
+}
+
+model Question {
+  id        String   @id @default(uuid())
+  question  String
+  category  String   // personality, compatibility, lifestyle, values, communication, relationship
+  type      String   // scale, multiple, text
+  options   Json?    // For multiple choice questions
+  minValue  Int?     @map("min_value") // For scale questions
+  maxValue  Int?     @map("max_value") // For scale questions
+  weight    Int      @default(1)
+  emoji     String?
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  answers   UserAnswer[]
+
+  // Indexes
+  @@index([category])
+  @@index([isActive])
+  @@index([weight])
+  @@map("questions")
+  @@schema("soulsync")
+}
+
+model UserAnswer {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  questionId String   @map("question_id")
+  answer     String
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  
+  // Constraints
+  @@unique([userId, questionId])
+  @@index([userId])
+  @@index([questionId])
+  @@map("user_answers")
+  @@schema("soulsync")
+}
+
+model Subscription {
+  id                   String    @id @default(uuid())
+  userId               String    @map("user_id")
+  plan                 String    // free, premium, vip
+  status               String    @default("active") // active, cancelled, expired
+  paypalSubscriptionId String?   @map("paypal_subscription_id")
+  expiresAt            DateTime  @map("expires_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([userId])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("subscriptions")
+  @@schema("soulsync")
+}
+
+model Payment {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  paymentId  String?  @map("payment_id") // External payment provider ID
+  orderId    String?  @map("order_id")   // Order reference ID
+  amount     Float
+  currency   String
+  payCurrency String? @map("pay_currency") // For crypto payments
+  status     String   // pending, completed, failed, cancelled
+  provider   String   // coinbase, stripe, paypal, nowpayments
+  providerId String?  @map("provider_id") // Payment provider's transaction ID
+  description String?
+  paymentUrl String?  @map("payment_url") // For crypto payments
+  type       String?  @default("one_time") // one_time, subscription
+  metadata   Json?    // Additional payment data
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([userId])
+  @@index([status])
+  @@index([provider])
+  @@index([paymentId])
+  @@index([orderId])
+  @@map("payments")
+  @@schema("soulsync")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+  @@schema("soulsync")
+}
+
+model UserProfile {
+  id              String   @id @default(uuid())
+  userId          String   @unique @map("user_id")
+  phoneNumber     String?  @map("phone_number")
+  dateOfBirth     DateTime? @map("date_of_birth")
+  gender          String?
+  lookingFor      String?  @map("looking_for")
+  relationshipType String? @map("relationship_type") // casual, serious, friendship
+  education       String?
+  occupation      String?
+  height          String?
+  religion        String?
+  smokingStatus   String?  @map("smoking_status")
+  drinkingStatus  String?  @map("drinking_status")
+  hasChildren     Boolean? @map("has_children")
+  wantsChildren   Boolean? @map("wants_children")
+  profileComplete Boolean  @default(false) @map("profile_complete")
+  lastActive      DateTime @default(now()) @map("last_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([gender])
+  @@index([lookingFor])
+  @@index([relationshipType])
+  @@index([lastActive])
+  @@map("user_profiles")
+  @@schema("soulsync")
+}
+
+model MatchPreference {
+  id              String   @id @default(uuid())
+  userId          String   @unique @map("user_id")
+  minAge          Int?     @map("min_age")
+  maxAge          Int?     @map("max_age")
+  maxDistance     Int?     @map("max_distance") // in kilometers
+  preferredGender String?  @map("preferred_gender")
+  dealBreakers    String[] @map("deal_breakers")
+  mustHaves       String[] @map("must_haves")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("match_preferences")
+  @@schema("soulsync")
+}
+
+model BlockedUser {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  blockedId String   @map("blocked_id")
+  reason    String?
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  user      User     @relation("UserBlocks", fields: [userId], references: [id], onDelete: Cascade)
+  blocked   User     @relation("UserBlocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  // Constraints
+  @@unique([userId, blockedId])
+  @@index([userId])
+  @@index([blockedId])
+  @@map("blocked_users")
+  @@schema("soulsync")
+}
+
+model Report {
+  id         String   @id @default(uuid())
+  reporterId String   @map("reporter_id")
+  reportedId String   @map("reported_id")
+  reason     String
+  description String?
+  status     String   @default("pending") // pending, reviewed, resolved
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  reporter   User     @relation("UserReports", fields: [reporterId], references: [id], onDelete: Cascade)
+  reported   User     @relation("UserReported", fields: [reportedId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([reporterId])
+  @@index([reportedId])
+  @@index([status])
+  @@map("reports")
+  @@schema("soulsync")
+}

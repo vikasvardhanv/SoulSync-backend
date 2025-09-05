@@ -1,0 +1,81 @@
+{
+  "name": "soulsync-backend",
+  "version": "1.0.0",
+  "description": "SoulSync Backend API - A spiritual connection and dating platform backend",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "NODE_ENV=production node src/server.js",
+    "dev": "NODE_ENV=development node src/server.js",
+    "build": "npm run prisma:generate",
+    "postinstall": "npm run prisma:generate",
+    "migrate:deploy": "npm run prisma:migrate:deploy",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:reset": "prisma migrate reset",
+    "prisma:studio": "prisma studio",
+    "seed": "node src/database/seed.js",
+    "docker:build": "docker build -t soulsync-backend .",
+    "docker:run": "docker run -p 5001:5001 soulsync-backend",
+    "docker:dev": "docker-compose up --build",
+    "docker:prod": "docker-compose -f docker-compose.prod.yml up --build",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop ecosystem.config.js",
+    "pm2:restart": "pm2 restart ecosystem.config.js",
+    "pm2:logs": "pm2 logs",
+    "lint": "echo 'Linting not configured yet'",
+    "test": "echo 'Tests not configured yet'"
+  },
+  "keywords": [
+    "nodejs",
+    "express",
+    "api",
+    "backend",
+    "prisma",
+    "postgresql",
+    "dating",
+    "spiritual",
+    "soulsync"
+  ],
+  "author": "SoulSync Team",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@prisma/client": "^6.12.0",
+    "axios": "^1.11.0",
+    "bcryptjs": "^2.4.3",
+    "cloudinary": "^1.41.0",
+    "compression": "^1.7.4",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "express-validator": "^7.0.1",
+    "helmet": "^7.1.0",
+    "joi": "^17.11.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "multer": "^2.0.0",
+    "multer-storage-cloudinary": "^4.0.0",
+    "nodemailer": "^6.10.1",
+    "pg": "^8.11.3",
+    "pm2": "^5.3.0",
+    "prisma": "^6.12.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/soulsync-backend.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/soulsync-backend/issues"
+  },
+  "homepage": "https://soulsync.solutions"
+}
