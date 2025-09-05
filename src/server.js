@@ -13,7 +13,7 @@ dotenv.config();
 
 // Validate required environment variables
 const requiredEnvVars = [
-  'DATABASE_URL',
+  'PRISMA_DATABASE_URL',
   'JWT_SECRET',
   'CLOUDINARY_CLOUD_NAME',
   'CLOUDINARY_API_KEY',
@@ -23,7 +23,10 @@ const requiredEnvVars = [
 const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 if (missingEnvVars.length > 0) {
   console.error('❌ Missing required environment variables:', missingEnvVars);
-  process.exit(1);
+  // Don't exit process in serverless environment, just log the error
+  if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+    process.exit(1);
+  }
 }
 
 const app = express();
@@ -163,13 +166,15 @@ app.use(notFound);
 // Global error handler
 app.use(errorHandler);
 
-// Start the server
-const PORT = process.env.PORT || 5001;
-app.listen(PORT, () => {
-  console.log(`✅ SoulSync Backend server running on port ${PORT}`);
-  console.log(`🌐 Server URL: http://localhost:${PORT}`);
-  console.log(`🎉 API Base URL: http://localhost:${PORT}/api`);
-});
+// Start the server (only for local development)
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+  const PORT = process.env.PORT || 5001;
+  app.listen(PORT, () => {
+    console.log(`✅ SoulSync Backend server running on port ${PORT}`);
+    console.log(`🌐 Server URL: http://localhost:${PORT}`);
+    console.log(`🎉 API Base URL: http://localhost:${PORT}/api`);
+  });
+}
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (error) => {

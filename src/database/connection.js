@@ -8,7 +8,7 @@ const prisma = globalForPrisma.prisma || new PrismaClient({
   errorFormat: 'minimal',
   datasources: {
     db: {
-      url: process.env.DATABASE_URL
+      url: process.env.PRISMA_DATABASE_URL || process.env.DATABASE_URL
     }
   }
 });
@@ -18,15 +18,17 @@ if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
 }
 
-// Test connection on startup
-prisma.$connect()
-  .then(() => {
-    console.log('✅ Database connected successfully');
-  })
-  .catch((error) => {
-    console.error('❌ Database connection failed:', error);
-    process.exit(1);
-  });
+// Test connection on startup (only in development)
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+  prisma.$connect()
+    .then(() => {
+      console.log('✅ Database connected successfully');
+    })
+    .catch((error) => {
+      console.error('❌ Database connection failed:', error);
+      process.exit(1);
+    });
+}
 
 // Graceful shutdown
 process.on('beforeExit', async () => {
