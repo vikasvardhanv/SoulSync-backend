@@ -27,7 +27,7 @@ module.exports = {
         'node_modules',
         'logs',
         '.git',
-        '.env',
+          '.env',
         '*.log',
         'uploads'
       ],

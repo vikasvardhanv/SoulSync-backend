@@ -143,7 +143,6 @@ router.get('/:id', optionalAuth, async (req, res) => {
 
 // Get random questions
 router.get('/random/:count', optionalAuth, [
-  queryValidator('count').isInt({ min: 1, max: 50 }),
   queryValidator('category').optional().isIn(['personality', 'compatibility', 'lifestyle', 'values', 'communication', 'relationship']),
   queryValidator('exclude').optional().isArray()
 ], async (req, res) => {
@@ -161,6 +160,15 @@ router.get('/random/:count', optionalAuth, [
     const { category, exclude = [] } = req.query;
     const userId = req.user?.id;
 
+    // Validate count parameter
+    const countNum = parseInt(count);
+    if (isNaN(countNum) || countNum < 1 || countNum > 50) {
+      return res.status(400).json({
+        success: false,
+        message: 'Count must be a number between 1 and 50'
+      });
+    }
+
     // Build where clause
     const whereClause = {
       isActive: true
@@ -176,15 +184,14 @@ router.get('/random/:count', optionalAuth, [
       };
     }
 
-    const questions = await prisma.question.findMany({
-      where: whereClause,
-      orderBy: {
-        _count: {
-          select: { id: true }
-        }
-      },
-      take: parseInt(count)
+    // Get all matching questions first, then randomize in JavaScript
+    const allQuestions = await prisma.question.findMany({
+      where: whereClause
     });
+
+    // Shuffle the array and take the requested count
+    const shuffled = allQuestions.sort(() => 0.5 - Math.random());
+    const questions = shuffled.slice(0, countNum);
 
     // Get user's answers if authenticated
     let userAnswers = {};

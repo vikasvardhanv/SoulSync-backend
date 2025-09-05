@@ -145,8 +145,8 @@ router.post('/register', validateRegistration, async (req, res, next) => {
           type: 'existing_user',
           message: 'You can sign in with your existing account or reset your password if forgotten',
           links: {
-            login: '/login',
-            forgot_password: '/forgot-password'
+            login: 'https://soulsync.solutions/login',
+            forgot_password: 'https://soulsync.solutions/forgot-password'
           }
         }
       });
@@ -221,7 +221,7 @@ router.post('/register', validateRegistration, async (req, res, next) => {
         nextStep: {
           type: 'email_verification',
           message: 'Check your email and click the verification link to fully activate your account',
-          resend_link: '/auth/resend-verification'
+          resend_link: 'https://soulsync.solutions/auth/resend-verification'
         }
       }
     });
@@ -276,7 +276,7 @@ router.get('/verify-email', async (req, res, next) => {
       message: 'Email verified successfully! Your account is now fully activated.',
       data: {
         user,
-        redirect: '/dashboard'
+        redirect: 'https://soulsync.solutions/dashboard'
       }
     });
   } catch (error) {
@@ -296,7 +296,7 @@ router.get('/verify-email', async (req, res, next) => {
         action: {
           type: 'resend_verification',
           message: 'Request a new verification email',
-          link: '/auth/resend-verification'
+          link: 'https://soulsync.solutions/auth/resend-verification'
         }
       });
     }
@@ -379,8 +379,8 @@ router.post('/login', [
           type: 'account_not_found',
           message: 'No account found with this email. Would you like to create one?',
           links: {
-            register: '/register',
-            forgot_password: '/forgot-password'
+            register: 'https://soulsync.solutions/register',
+            forgot_password: 'https://soulsync.solutions/forgot-password'
           }
         }
       });
@@ -403,7 +403,7 @@ router.post('/login', [
           type: 'wrong_password',
           message: 'Forgot your password?',
           links: {
-            forgot_password: '/forgot-password'
+            forgot_password: 'https://soulsync.solutions/forgot-password'
           }
         }
       });
@@ -433,7 +433,7 @@ router.post('/login', [
       response.reminder = {
         type: 'email_verification',
         message: 'Please verify your email address to unlock all features',
-        action: 'resend_verification'
+        action: 'https://soulsync.solutions/auth/resend-verification'
       };
     }
 
@@ -556,7 +556,7 @@ router.post('/reset-password', [
         action: {
           type: 'request_new_reset',
           message: 'Request a new password reset link',
-          link: '/forgot-password'
+          link: 'https://soulsync.solutions/forgot-password'
         }
       });
     }
@@ -587,7 +587,7 @@ router.post('/reset-password', [
       success: true,
       message: 'Password reset successfully! You can now log in with your new password.',
       data: {
-        redirect: '/login',
+        redirect: 'https://soulsync.solutions/login',
         message: 'Please log in with your new password'
       }
     });
@@ -697,7 +697,7 @@ router.put('/change-password', authenticateToken, [
         action: {
           type: 'login_required',
           message: 'Please log in again',
-          link: '/login'
+          link: 'https://soulsync.solutions/login'
         }
       });
     }
@@ -731,7 +731,7 @@ router.put('/change-password', authenticateToken, [
         action: {
           type: 'login_required',
           message: 'Please log in again',
-          link: '/login'
+          link: 'https://soulsync.solutions/login'
         }
       });
     }
@@ -768,7 +768,7 @@ router.put('/change-password', authenticateToken, [
         action: {
           type: 'login_required',
           message: 'Please log in again',
-          link: '/login'
+          link: 'https://soulsync.solutions/login'
         }
       });
     }
@@ -815,7 +815,7 @@ router.put('/change-password', authenticateToken, [
       response.reminder = {
         type: 'email_verification',
         message: 'Please verify your email address to unlock all features',
-        action: '/auth/resend-verification'
+        action: 'https://soulsync.solutions/auth/resend-verification'
       };
     }
  
