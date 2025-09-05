@@ -49,12 +49,21 @@ app.use(helmet({
 }));
 
 app.use(cors({
-  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : [
-    'http://localhost:3000',
-    'https://soulsync.solutions',
-    'https://www.soulsync.solutions',
-    'https://api.soulsync.solutions'
-  ],
+  origin: function (origin, callback) {
+    const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : [
+      'http://localhost:3000',
+      'https://soulsync.solutions',
+      'https://www.soulsync.solutions',
+      'https://api.soulsync.solutions'
+    ];
+    // Allow requests with no origin (like mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      return callback(null, true);
+    } else {
+      return callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'Cache-Control']
@@ -139,6 +148,21 @@ import subscriptionRoutes from './routes/subscriptions.js';
 import paymentRoutes from './routes/payments.js';
 import imageRoutes from './routes/images.js';
 
+// Debug endpoint for production testing
+app.all('/api/debug', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Debug endpoint working',
+    method: req.method,
+    path: req.path,
+    headers: req.headers,
+    body: req.body,
+    query: req.query,
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV
+  });
+});
+
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -150,7 +174,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/images', imageRoutes);
 
 // Catch-all route for undefined endpoints
-app.get('*', (req, res) => {
+app.all('*', (req, res) => {
   res.status(404).json({
     success: false,
     message: 'API endpoint not found',
