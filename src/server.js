@@ -212,6 +212,16 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
   });
 }
 
+// For Vercel serverless functions - initialize database connection
+if (process.env.VERCEL) {
+  // Ensure Prisma is connected in serverless environment
+  import('./database/connection.js').then(() => {
+    console.log('✅ Serverless database connection initialized');
+  }).catch((error) => {
+    console.error('❌ Serverless database connection failed:', error);
+  });
+}
+
 // Handle uncaught exceptions
 process.on('uncaughtException', (error) => {
   console.error('❌ Uncaught Exception:', error);
