@@ -7,6 +7,7 @@ import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
+import { apiLogger, errorLogger } from './middleware/logger.js';
 
 // Load environment variables
 dotenv.config();
@@ -98,12 +99,18 @@ app.use(express.urlencoded({
 // Compression middleware
 app.use(compression());
 
-// Logging middleware
-if (process.env.NODE_ENV === 'development') {
-  app.use(morgan('dev'));
-} else {
-  app.use(morgan('combined'));
-}
+// Enhanced logging middleware
+console.log(`🚀 [${new Date().toISOString()}] SoulSync Backend initializing...`, {
+  environment: process.env.NODE_ENV,
+  isVercel: !!process.env.VERCEL,
+  nodeVersion: process.version
+});
+
+// Use enhanced API logging for all environments
+app.use(apiLogger);
+
+// Add error logging middleware (before error handlers)
+app.use(errorLogger);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

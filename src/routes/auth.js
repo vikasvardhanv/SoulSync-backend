@@ -6,6 +6,7 @@ import { body, validationResult } from 'express-validator';
 import prisma from '../database/connection.js';
 import { authenticateToken } from '../middleware/auth.js';
 import EmailService from '../services/emailService.js';
+import { authLogger, dbLogger } from '../middleware/logger.js';
 
 const router = express.Router();
 
@@ -138,6 +139,7 @@ router.post('/register', validateRegistration, async (req, res, next) => {
     });
     
     if (existingUser) {
+      authLogger('REGISTRATION_FAILED', null, { reason: 'Email already exists', email });
       return res.status(409).json({
         success: false,
         message: 'An account with this email already exists',
@@ -193,6 +195,9 @@ router.post('/register', validateRegistration, async (req, res, next) => {
         createdAt: true
       }
     });
+
+    authLogger('REGISTRATION_SUCCESS', user.id, { email: user.email, name: user.name });
+    dbLogger('CREATE', 'users', { userId: user.id, email: user.email });
 
     // Generate verification token
     const verificationToken = EmailService.generateVerificationToken(user.id);
