@@ -103,7 +103,10 @@ app.use(compression());
 console.log(`🚀 [${new Date().toISOString()}] SoulSync Backend initializing...`, {
   environment: process.env.NODE_ENV,
   isVercel: !!process.env.VERCEL,
-  nodeVersion: process.version
+  nodeVersion: process.version,
+  corsOrigin: process.env.CORS_ORIGIN,
+  databaseUrl: process.env.PRISMA_DATABASE_URL ? 'configured' : 'missing',
+  jwtSecret: process.env.JWT_SECRET ? 'configured' : 'missing'
 });
 
 // Use enhanced API logging for all environments
