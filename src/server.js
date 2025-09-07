@@ -16,9 +16,7 @@ dotenv.config();
 const requiredEnvVars = [
   'PRISMA_DATABASE_URL',
   'JWT_SECRET',
-  'CLOUDINARY_CLOUD_NAME',
-  'CLOUDINARY_API_KEY',
-  'CLOUDINARY_API_SECRET'
+  // Cloudinary removed - no longer required
 ];
 
 const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
@@ -41,10 +39,10 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:", "blob:", "https://res.cloudinary.com"],
+  imgSrc: ["'self'", "data:", "https:", "blob:"],
       scriptSrc: ["'self'", "'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      connectSrc: ["'self'", "https://api.soulsync.solutions", "https://*.cloudinary.com", process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000']
+  connectSrc: ["'self'", "https://api.soulsync.solutions", process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000']
     },
   },
 }));
@@ -98,6 +96,24 @@ app.use(express.urlencoded({
 
 // Compression middleware
 app.use(compression());
+
+// Startup logs
+console.info('🔰 Initializing SoulSync Backend');
+console.info('Environment:', process.env.NODE_ENV || 'undefined');
+console.info('Vercel:', process.env.VERCEL ? 'yes' : 'no');
+console.info('API base routes will be mounted under /api');
+
+// Request logging middleware (structured, lightweight)
+app.use((req, res, next) => {
+  const start = Date.now();
+  const remoteIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  console.info(`➡️  ${req.method} ${req.originalUrl} - from: ${remoteIp}`);
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.info(`✅  ${req.method} ${req.originalUrl} - ${res.statusCode} (${duration}ms)`);
+  });
+  next();
+});
 
 // Enhanced logging middleware
 console.log(`🚀 [${new Date().toISOString()}] SoulSync Backend initializing...`, {
@@ -194,6 +210,20 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/images', imageRoutes);
+
+// Log mounted routes summary
+console.info('📡 Mounted API routes:');
+console.info(' - /health');
+console.info(' - /api/health');
+console.info(' - /api/debug');
+console.info(' - /api/auth');
+console.info(' - /api/users');
+console.info(' - /api/questions');
+console.info(' - /api/matches');
+console.info(' - /api/messages');
+console.info(' - /api/subscriptions');
+console.info(' - /api/payments');
+console.info(' - /api/images');
 
 // Catch-all route for undefined endpoints
 app.all('*', (req, res) => {

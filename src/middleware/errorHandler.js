@@ -1,5 +1,22 @@
 export const errorHandler = (err, req, res, next) => {
-  console.error('Error:', err);
+  try {
+    // Sanitize headers to avoid logging secrets
+    const safeHeaders = { ...req.headers };
+    if (safeHeaders.authorization) safeHeaders.authorization = '[REDACTED]';
+    if (safeHeaders.cookie) safeHeaders.cookie = '[REDACTED]';
+
+    console.error('❌ Unhandled Error:', {
+      message: err.message,
+      name: err.name,
+      path: req.originalUrl,
+      method: req.method,
+      status: err.status || null,
+      headers: safeHeaders,
+      body: req.body
+    });
+  } catch (logErr) {
+    console.error('Error while logging errorHandler details:', logErr);
+  }
 
   // Default error
   let statusCode = 500;
@@ -29,14 +46,20 @@ export const errorHandler = (err, req, res, next) => {
     message = 'Invalid data provided';
   }
 
-  res.status(statusCode).json({
+  const responsePayload = {
     success: false,
-    message,
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-  });
+    message
+  };
+
+  if (process.env.NODE_ENV === 'development') {
+    responsePayload.stack = err.stack;
+  }
+
+  res.status(statusCode).json(responsePayload);
 };
 
 export const notFound = (req, res, next) => {
+  console.warn(`⚠️  Not Found: ${req.method} ${req.originalUrl}`);
   res.status(404).json({
     success: false,
     message: `Route ${req.originalUrl} not found`

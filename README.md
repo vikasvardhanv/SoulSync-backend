@@ -21,6 +21,7 @@ A Node.js/Express backend API for the SoulSync spiritual connection and dating p
 - **Database**: PostgreSQL with Prisma ORM
 - **Authentication**: JWT (JSON Web Tokens)
 - **File Storage**: Cloudinary
+ - **File Storage**: Database-backed (Cloudinary removed)
 - **Email**: Nodemailer
 - **Process Manager**: PM2
 - **Containerization**: Docker & Docker Compose
@@ -67,10 +68,7 @@ JWT_REFRESH_SECRET="your-super-secret-refresh-key-different-from-jwt-secret"
 CORS_ORIGIN="https://soulsync.solutions,https://www.soulsync.solutions"
 
 # Cloudinary (Image Upload)
-CLOUDINARY_CLOUD_NAME="your-cloudinary-cloud-name"
-CLOUDINARY_API_KEY="your-cloudinary-api-key"
-CLOUDINARY_API_SECRET="your-cloudinary-api-secret"
-
+Note: Cloudinary integration has been removed. Images are stored in the database or another configured provider.
 # Email Configuration
 SMTP_USER="your-email@gmail.com"
 SMTP_PASS="your-app-password"
