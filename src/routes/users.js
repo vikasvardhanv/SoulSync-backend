@@ -2,6 +2,7 @@ import express from 'express';
 import { body, validationResult } from 'express-validator';
 import prisma from '../database/connection.js';
 import { authenticateToken, requireProfile } from '../middleware/auth.js';
+import { findCompatibleMatches, calculateCompatibilityScore, getMatchExplanation } from '../services/matchingAlgorithm.js';
 
 const router = express.Router();
 
@@ -166,78 +167,43 @@ router.get('/potential-matches', async (req, res) => {
   }
 });
 
-// Get potential matches (authenticated users)
+// Get potential matches (authenticated users with AI matching)
 router.get('/matches', authenticateToken, requireProfile, async (req, res) => {
   try {
     const userId = req.user.id;
     const { limit = 10, offset = 0 } = req.query;
 
-    // Get user's existing matches to exclude them
-    const existingMatches = await prisma.match.findMany({
-      where: {
-        OR: [
-          { userInitiatorId: userId },
-          { userReceiverId: userId }
-        ]
-      },
-      select: {
-        userInitiatorId: true,
-        userReceiverId: true
-      }
-    });
-
-    const excludedIds = existingMatches.map(m => 
-      m.userInitiatorId === userId ? m.userReceiverId : m.userInitiatorId
+    // Use AI matching algorithm to find compatible matches
+    const compatibleMatches = await findCompatibleMatches(
+      userId, 
+      prisma, 
+      parseInt(limit) + parseInt(offset)
     );
-    excludedIds.push(userId);
 
-    // Get potential matches
-    const potentialMatches = await prisma.user.findMany({
-      where: {
-        id: {
-          notIn: excludedIds
-        },
-        isActive: true,
-        age: {
-          not: null
-        },
-        bio: {
-          not: null
-        }
-      },
-      select: {
-        id: true,
-        name: true,
-        age: true,
-        bio: true,
-        location: true,
-        interests: true,
-        photos: true,
-        createdAt: true
-      },
-      orderBy: {
-        createdAt: 'desc'
-      },
-      take: parseInt(limit),
-      skip: parseInt(offset)
-    });
+    // Apply pagination
+    const paginatedMatches = compatibleMatches.slice(
+      parseInt(offset),
+      parseInt(offset) + parseInt(limit)
+    );
 
     res.json({
       success: true,
       data: {
-        matches: potentialMatches,
+        matches: paginatedMatches,
+        totalCount: compatibleMatches.length,
         pagination: {
           limit: parseInt(limit),
           offset: parseInt(offset),
-          total: potentialMatches.length
+          hasMore: compatibleMatches.length > (parseInt(offset) + parseInt(limit))
         }
-      }
+      },
+      message: 'Matches calculated using AI compatibility algorithm'
     });
   } catch (error) {
     console.error('Get matches error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch matches'
+      message: error.message || 'Failed to fetch matches'
     });
   }
 });
@@ -334,6 +300,93 @@ router.delete('/account', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete account'
+    });
+  }
+});
+
+// Get compatibility explanation between two users
+router.get('/compatibility/:userId', authenticateToken, async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+    const targetUserId = req.params.userId;
+
+    // Get both users' answers
+    const [currentUser, targetUser] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: currentUserId },
+        include: {
+          answers: {
+            select: {
+              questionId: true,
+              answer: true
+            }
+          }
+        }
+      }),
+      prisma.user.findUnique({
+        where: { id: targetUserId },
+        include: {
+          answers: {
+            select: {
+              questionId: true,
+              answer: true
+            }
+          }
+        }
+      })
+    ]);
+
+    if (!currentUser || !targetUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Convert answers to object format
+    const currentUserAnswers = {};
+    currentUser.answers.forEach(a => {
+      currentUserAnswers[a.questionId] = a.answer;
+    });
+
+    const targetUserAnswers = {};
+    targetUser.answers.forEach(a => {
+      targetUserAnswers[a.questionId] = a.answer;
+    });
+
+    // Calculate compatibility score
+    const compatibilityScore = calculateCompatibilityScore(
+      currentUserAnswers,
+      targetUserAnswers
+    );
+
+    // Get match explanation
+    const explanation = getMatchExplanation(
+      currentUserAnswers,
+      targetUserAnswers
+    );
+
+    res.json({
+      success: true,
+      data: {
+        compatibilityScore: Number(compatibilityScore.toFixed(1)),
+        explanation,
+        targetUser: {
+          id: targetUser.id,
+          name: targetUser.name,
+          age: targetUser.age,
+          bio: targetUser.bio,
+          location: targetUser.location,
+          interests: targetUser.interests,
+          photos: targetUser.photos
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get compatibility error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to calculate compatibility'
     });
   }
 });
