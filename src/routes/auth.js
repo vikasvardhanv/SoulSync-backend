@@ -61,6 +61,15 @@ const validateRegistration = [
       
       // Check if it's a data URL (base64)
       if (value.startsWith('data:image/')) {
+        // Validate base64 image size (estimate)
+        const base64Length = value.length;
+        const sizeInBytes = (base64Length * 3) / 4;
+        const sizeInMB = sizeInBytes / (1024 * 1024);
+        
+        if (sizeInMB > 2) {
+          throw new Error(`Photo too large (${sizeInMB.toFixed(1)}MB). Please compress images to under 2MB each. Tip: Use lower resolution or compress before uploading.`);
+        }
+        
         return true;
       }
       

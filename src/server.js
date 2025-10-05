@@ -82,7 +82,7 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Body parsing middleware
+// Body parsing middleware with proper error handling
 app.use(express.json({ 
   limit: '10mb',
   verify: (req, res, buf) => {
@@ -93,6 +93,28 @@ app.use(express.urlencoded({
   extended: true, 
   limit: '10mb' 
 }));
+
+// Handle payload too large errors
+app.use((err, req, res, next) => {
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({
+      success: false,
+      message: 'Upload size too large',
+      error: {
+        type: 'PAYLOAD_TOO_LARGE',
+        maxSize: '10MB',
+        currentSize: req.headers['content-length'] ? `${Math.round(req.headers['content-length'] / (1024 * 1024))}MB` : 'unknown',
+        suggestions: [
+          'Compress your images before uploading',
+          'Upload fewer photos at once (max 6)',
+          'Use images under 2MB each for best results',
+          'Ensure photos show your face clearly'
+        ]
+      }
+    });
+  }
+  next(err);
+});
 
 // Compression middleware
 app.use(compression());
