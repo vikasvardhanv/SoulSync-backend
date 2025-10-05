@@ -20,6 +20,8 @@ router.get('/profile', authenticateToken, async (req, res) => {
         age: true,
         bio: true,
         location: true,
+        gender: true,
+        lookingFor: true,
         interests: true,
         photos: true,
         isVerified: true,
@@ -28,10 +30,24 @@ router.get('/profile', authenticateToken, async (req, res) => {
       }
     });
 
+    // Get user's quiz answers count for personality score
+    const answersCount = await prisma.userAnswer.count({
+      where: { userId }
+    });
+
+    // Calculate personality score (0-100 based on number of questions answered)
+    // Assuming 50 total questions for 100% score
+    const totalQuestions = 50;
+    const personalityScore = Math.min(100, Math.round((answersCount / totalQuestions) * 100));
+
     res.json({
       success: true,
       data: {
-        user
+        user: {
+          ...user,
+          personalityScore,
+          questionsAnswered: answersCount
+        }
       }
     });
   } catch (error) {
@@ -43,14 +59,16 @@ router.get('/profile', authenticateToken, async (req, res) => {
   }
 });
 
-// Update user profile
+// Update user profile (protected)
 router.put('/profile', authenticateToken, [
   body('name').optional().trim().isLength({ min: 2, max: 50 }),
   body('age').optional().isInt({ min: 18, max: 100 }),
   body('bio').optional().trim().isLength({ max: 500 }),
   body('location').optional().trim().isLength({ max: 100 }),
   body('interests').optional().isArray(),
-  body('photos').optional().isArray()
+  body('photos').optional().isArray(),
+  body('gender').optional().isIn(['male', 'female', 'non-binary', 'other', 'prefer-not-to-say']),
+  body('lookingFor').optional().isIn(['male', 'female', 'non-binary', 'everyone'])
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -63,7 +81,7 @@ router.put('/profile', authenticateToken, [
     }
 
     const userId = req.user.id;
-    const { name, age, bio, location, interests, photos } = req.body;
+    const { name, age, bio, location, interests, photos, gender, lookingFor } = req.body;
 
     // Build update data object
     const updateData = {};
@@ -73,6 +91,8 @@ router.put('/profile', authenticateToken, [
     if (location !== undefined) updateData.location = location;
     if (interests !== undefined) updateData.interests = interests;
     if (photos !== undefined) updateData.photos = photos;
+    if (gender !== undefined) updateData.gender = gender;
+    if (lookingFor !== undefined) updateData.lookingFor = lookingFor;
 
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({

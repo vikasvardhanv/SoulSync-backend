@@ -21,6 +21,8 @@ model User {
   age         Int?
   bio         String?
   location    String?
+  gender      String?  // male, female, non-binary, other, prefer-not-to-say
+  lookingFor  String?  @map("looking_for") // male, female, non-binary, everyone
   interests   String[]
   photos      String[] // Array of image IDs
   isVerified  Boolean  @default(false)
