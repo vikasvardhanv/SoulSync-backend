@@ -378,6 +378,8 @@ router.post('/login', [
         age: true,
         bio: true,
         location: true,
+        gender: true,
+        lookingFor: true,
         interests: true,
         photos: true,
         isVerified: true,
@@ -427,6 +429,13 @@ router.post('/login', [
     const { accessToken, refreshToken } = generateTokens(user.id);
     await saveRefreshToken(user.id, refreshToken);
 
+    // Get user's personality score
+    const answersCount = await prisma.userAnswer.count({
+      where: { userId: user.id }
+    });
+    const totalQuestions = 50;
+    const personalityScore = Math.min(100, Math.round((answersCount / totalQuestions) * 100));
+
     // Remove password from response
     const { password: _, ...userWithoutPassword } = user;
 
@@ -434,7 +443,11 @@ router.post('/login', [
       success: true,
       message: 'Welcome back! Login successful.',
       data: {
-        user: userWithoutPassword,
+        user: {
+          ...userWithoutPassword,
+          personalityScore,
+          questionsAnswered: answersCount
+        },
         tokens: {
           accessToken,
           refreshToken
@@ -803,6 +816,8 @@ router.put('/change-password', authenticateToken, [
         age: true,
         bio: true,
         location: true,
+        gender: true,
+        lookingFor: true,
         interests: true,
         photos: true,
         isVerified: true,
@@ -818,10 +833,23 @@ router.put('/change-password', authenticateToken, [
         message: 'User not found or account deactivated'
       });
     }
+
+    // Get user's personality score
+    const answersCount = await prisma.userAnswer.count({
+      where: { userId: user.id }
+    });
+    const totalQuestions = 50;
+    const personalityScore = Math.min(100, Math.round((answersCount / totalQuestions) * 100));
  
     const response = {
       success: true,
-      data: { user }
+      data: { 
+        user: {
+          ...user,
+          personalityScore,
+          questionsAnswered: answersCount
+        }
+      }
     };
  
     // Add verification reminder if not verified

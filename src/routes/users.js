@@ -111,6 +111,8 @@ router.put('/profile', authenticateToken, [
         age: true,
         bio: true,
         location: true,
+        gender: true,
+        lookingFor: true,
         interests: true,
         photos: true,
         isVerified: true,
@@ -120,11 +122,22 @@ router.put('/profile', authenticateToken, [
       }
     });
 
+    // Get user's personality score
+    const answersCount = await prisma.userAnswer.count({
+      where: { userId }
+    });
+    const totalQuestions = 50;
+    const personalityScore = Math.min(100, Math.round((answersCount / totalQuestions) * 100));
+
     res.json({
       success: true,
       message: 'Profile updated successfully',
       data: {
-        user
+        user: {
+          ...user,
+          personalityScore,
+          questionsAnswered: answersCount
+        }
       }
     });
   } catch (error) {
