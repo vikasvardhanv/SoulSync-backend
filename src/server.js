@@ -185,6 +185,7 @@ import messageRoutes from './routes/messages.js';
 import subscriptionRoutes from './routes/subscriptions.js';
 import paymentRoutes from './routes/payments.js';
 import imageRoutes from './routes/images.js';
+import notificationRoutes from './routes/notifications.js';
 
 // Debug endpoint for production testing
 app.all('/api/debug', (req, res) => {
@@ -210,6 +211,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/images', imageRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Log mounted routes summary
 console.info('📡 Mounted API routes:');
@@ -224,6 +226,7 @@ console.info(' - /api/messages');
 console.info(' - /api/subscriptions');
 console.info(' - /api/payments');
 console.info(' - /api/images');
+console.info(' - /api/notifications');
 
 // Catch-all route for undefined endpoints
 app.all('*', (req, res) => {

@@ -97,13 +97,105 @@ router.post('/', authenticateToken, requireProfile, [
       });
     }
 
-    // Create match
+        // Create match
     const match = await prisma.match.create({
       data: {
         userInitiatorId: userId,
         userReceiverId: matchedUserId,
-        compatibilityScore: compatibilityScore || null
+        compatibilityScore: compatibilityScore || null,
+        status: 'pending'
       },
+      include: {
+        userInitiator: {
+          select: {
+            id: true,
+            name: true,
+            age: true,
+            location: true,
+            photos: true,
+            bio: true
+          }
+        },
+        userReceiver: {
+          select: {
+            id: true,
+            name: true,
+            age: true,
+            location: true,
+            photos: true,
+            bio: true
+          }
+        }
+      }
+    });
+
+    // Create notification for the matched user
+    await prisma.notification.create({
+      data: {
+        userId: matchedUserId,
+        type: 'match_request',
+        fromUserId: userId,
+        matchId: match.id,
+        message: `${req.user.name} wants to match with you!`,
+        read: false
+      }
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Match request sent successfully',
+      match
+    });
+  } catch (error) {
+    console.error('Error creating match:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create match',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Accept or reject match
+router.put('/:id/respond', authenticateToken, [
+  body('action').isIn(['accept', 'reject'])
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { id } = req.params;
+    const { action } = req.body;
+    const userId = req.user.id;
+
+    // Check if match exists and user is the receiver
+    const match = await prisma.match.findFirst({
+      where: {
+        id,
+        userReceiverId: userId,
+        status: 'pending'
+      }
+    });
+
+    if (!match) {
+      return res.status(404).json({
+        success: false,
+        message: 'Match request not found or already processed'
+      });
+    }
+
+    const newStatus = action === 'accept' ? 'accepted' : 'rejected';
+
+    // Update match status
+    const updatedMatch = await prisma.match.update({
+      where: { id },
+      data: { status: newStatus },
       include: {
         userInitiator: {
           select: {
@@ -112,7 +204,6 @@ router.post('/', authenticateToken, requireProfile, [
             age: true,
             bio: true,
             location: true,
-            interests: true,
             photos: true
           }
         },
@@ -123,25 +214,65 @@ router.post('/', authenticateToken, requireProfile, [
             age: true,
             bio: true,
             location: true,
-            interests: true,
             photos: true
           }
         }
       }
     });
 
-    res.status(201).json({
-      success: true,
-      message: 'Match created successfully',
+    // If accepted, create notification for initiator and create conversation
+    if (action === 'accept') {
+      await prisma.notification.create({
+        data: {
+          userId: match.userInitiatorId,
+          type: 'match_accepted',
+          fromUserId: userId,
+          matchId: match.id,
+          message: `${req.user.name} accepted your match request!`,
+          read: false
+        }
+      });
+
+      // Create conversation between both users
+      const conversation = await prisma.conversation.create({
+        data: {
+          matchId: match.id,
+          user1Id: match.userInitiatorId,
+          user2Id: userId
+        }
+      });
+
+      return res.json({
+        success: true,
+        message: 'Match accepted successfully',
+        match: updatedMatch,
+        conversationId: conversation.id
+      });
+    }
+
+    // If rejected, notify initiator
+    await prisma.notification.create({
       data: {
-        match
+        userId: match.userInitiatorId,
+        type: 'match_rejected',
+        fromUserId: userId,
+        matchId: match.id,
+        message: `A match request was declined`,
+        read: false
       }
     });
+
+    res.json({
+      success: true,
+      message: 'Match declined',
+      match: updatedMatch
+    });
   } catch (error) {
-    console.error('Create match error:', error);
+    console.error('Error responding to match:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to create match'
+      message: 'Failed to respond to match',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });

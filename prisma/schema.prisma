@@ -44,6 +44,10 @@ model User {
   reportsMade         Report[]          @relation("UserReports")
   reportsReceived     Report[]          @relation("UserReported")
   images              Image[]
+  notifications       Notification[]    @relation("UserNotifications")
+  notificationsSent   Notification[]    @relation("NotificationSender")
+  conversationsUser1  Conversation[]    @relation("ConversationUser1")
+  conversationsUser2  Conversation[]    @relation("ConversationUser2")
 
   @@map("users")
   @@schema("soulsync")
@@ -79,8 +83,10 @@ model Match {
   updatedAt          DateTime @updatedAt @map("updated_at")
   
   // Relations
-  userInitiator      User     @relation("UserMatchesInitiated", fields: [userInitiatorId], references: [id], onDelete: Cascade)
-  userReceiver       User     @relation("UserMatchesReceived", fields: [userReceiverId], references: [id], onDelete: Cascade)
+  userInitiator      User           @relation("UserMatchesInitiated", fields: [userInitiatorId], references: [id], onDelete: Cascade)
+  userReceiver       User           @relation("UserMatchesReceived", fields: [userReceiverId], references: [id], onDelete: Cascade)
+  notifications      Notification[]
+  conversation       Conversation?
 
   // Indexes
   @@unique([userInitiatorId, userReceiverId])
@@ -88,6 +94,50 @@ model Match {
   @@index([userReceiverId])
   @@index([status])
   @@map("matches")
+  @@schema("soulsync")
+}
+
+model Notification {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  type       String   // match_request, match_accepted, match_rejected, message
+  fromUserId String?  @map("from_user_id")
+  matchId    String?  @map("match_id")
+  message    String
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user       User     @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  fromUser   User?    @relation("NotificationSender", fields: [fromUserId], references: [id], onDelete: Cascade)
+  match      Match?   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([userId])
+  @@index([read])
+  @@index([createdAt])
+  @@map("notifications")
+  @@schema("soulsync")
+}
+
+model Conversation {
+  id        String   @id @default(uuid())
+  matchId   String   @unique @map("match_id")
+  user1Id   String   @map("user1_id")
+  user2Id   String   @map("user2_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user1     User     @relation("ConversationUser1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2     User     @relation("ConversationUser2", fields: [user2Id], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([user1Id])
+  @@index([user2Id])
+  @@map("conversations")
   @@schema("soulsync")
 }
 
