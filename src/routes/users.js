@@ -223,8 +223,10 @@ router.get('/matches', authenticateToken, requireProfile, async (req, res) => {
       parseInt(offset) + parseInt(limit)
     );
 
-    // Determine appropriate message based on results
+    // Determine appropriate message and suggestions based on results
     let message = 'Matches calculated using AI compatibility algorithm';
+    let suggestions = null;
+    
     if (compatibleMatches.length === 0) {
       // Check if current user has completed quiz
       const userAnswers = await prisma.userAnswer.count({
@@ -233,9 +235,42 @@ router.get('/matches', authenticateToken, requireProfile, async (req, res) => {
       
       if (userAnswers === 0) {
         message = 'Complete your personality quiz to find compatible matches';
+        suggestions = {
+          action: 'complete_quiz',
+          description: 'Start by answering basic personality questions',
+          questionsNeeded: 10
+        };
+      } else if (userAnswers < 15) {
+        message = `Answer ${5} more questions to improve your match probability`;
+        suggestions = {
+          action: 'answer_more_questions',
+          description: 'More answers = better AI matching accuracy',
+          currentAnswers: userAnswers,
+          suggestedAdditional: Math.min(5, 15 - userAnswers),
+          improvementPotential: `${Math.min(25, (15 - userAnswers) * 5)}%`
+        };
       } else {
-        message = 'No compatible matches found. Try adjusting your preferences or check back later';
+        message = 'No compatible matches found right now. Try answering a few more questions or check back later';
+        suggestions = {
+          action: 'expand_criteria',
+          description: 'Consider answering specialized questions to find unique matches',
+          currentAnswers: userAnswers,
+          suggestedAdditional: 3
+        };
       }
+    } else if (compatibleMatches.length < 3) {
+      // Few matches found - suggest improvement
+      const userAnswers = await prisma.userAnswer.count({
+        where: { userId }
+      });
+      
+      suggestions = {
+        action: 'improve_matches',
+        description: 'Answer more questions to find additional compatible matches',
+        currentAnswers: userAnswers,
+        suggestedAdditional: 3,
+        currentMatches: compatibleMatches.length
+      };
     }
 
     res.json({
@@ -243,6 +278,7 @@ router.get('/matches', authenticateToken, requireProfile, async (req, res) => {
       data: {
         matches: paginatedMatches,
         totalCount: compatibleMatches.length,
+        suggestions,
         pagination: {
           limit: parseInt(limit),
           offset: parseInt(offset),
@@ -261,6 +297,129 @@ router.get('/matches', authenticateToken, requireProfile, async (req, res) => {
         stack: error.stack,
         details: error.toString()
       })
+    });
+  }
+});
+
+// Get user's matching profile insights and suggestions
+router.get('/matching-insights', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    console.log(`📊 Getting matching insights for user ${userId}`);
+
+    // Get user's current answers with question details
+    const userAnswersWithQuestions = await prisma.userAnswer.findMany({
+      where: { userId },
+      include: {
+        question: {
+          select: {
+            id: true,
+            category: true,
+            weight: true
+          }
+        }
+      }
+    });
+
+    // Analyze answer distribution by category
+    const categoryStats = {};
+    const totalQuestions = await prisma.question.count({ where: { isActive: true } });
+    
+    userAnswersWithQuestions.forEach(answer => {
+      const category = answer.question.category;
+      if (!categoryStats[category]) {
+        categoryStats[category] = {
+          answered: 0,
+          totalWeight: 0,
+          averageWeight: 0
+        };
+      }
+      categoryStats[category].answered++;
+      categoryStats[category].totalWeight += answer.question.weight;
+    });
+
+    // Calculate average weights and completion percentages
+    for (const category in categoryStats) {
+      categoryStats[category].averageWeight = 
+        categoryStats[category].totalWeight / categoryStats[category].answered;
+    }
+
+    // Get total questions per category
+    const questionsByCategory = await prisma.question.groupBy({
+      by: ['category'],
+      where: { isActive: true },
+      _count: { id: true }
+    });
+
+    questionsByCategory.forEach(cat => {
+      if (categoryStats[cat.category]) {
+        categoryStats[cat.category].total = cat._count.id;
+        categoryStats[cat.category].completionPercentage = 
+          Math.round((categoryStats[cat.category].answered / cat._count.id) * 100);
+      }
+    });
+
+    // Calculate overall matching readiness score
+    const totalAnswered = userAnswersWithQuestions.length;
+    const matchingReadinessScore = Math.min(100, Math.round((totalAnswered / 20) * 100));
+
+    // Identify improvement opportunities
+    const improvementSuggestions = [];
+    
+    if (totalAnswered < 5) {
+      improvementSuggestions.push({
+        priority: 'high',
+        category: 'basic_completion',
+        suggestion: 'Answer at least 5 basic questions to enable AI matching',
+        impact: 'Essential for any matches'
+      });
+    }
+
+    if (totalAnswered < 15) {
+      improvementSuggestions.push({
+        priority: 'medium',
+        category: 'matching_accuracy',
+        suggestion: `Answer ${15 - totalAnswered} more questions for better matching accuracy`,
+        impact: `Improve match probability by ~${(15 - totalAnswered) * 5}%`
+      });
+    }
+
+    // Check for category gaps
+    const lowCategories = Object.entries(categoryStats)
+      .filter(([, stats]) => stats.completionPercentage < 50)
+      .sort((a, b) => a[1].completionPercentage - b[1].completionPercentage);
+
+    if (lowCategories.length > 0) {
+      improvementSuggestions.push({
+        priority: 'low',
+        category: 'category_diversity',
+        suggestion: `Answer more ${lowCategories[0][0]} questions for well-rounded profile`,
+        impact: 'Better compatibility insights'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        totalAnswered,
+        totalQuestions,
+        matchingReadinessScore,
+        categoryStats,
+        improvementSuggestions,
+        insights: {
+          strengths: totalAnswered >= 15 ? ['Comprehensive profile', 'High matching accuracy'] : ['Profile in progress'],
+          recommendations: improvementSuggestions.map(s => s.suggestion)
+        }
+      },
+      message: `Profile ${matchingReadinessScore}% complete for optimal matching`
+    });
+
+  } catch (error) {
+    console.error('❌ Get matching insights error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch matching insights'
     });
   }
 });

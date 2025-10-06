@@ -28,15 +28,23 @@ export function calculateCompatibilityScore(user1Answers, user2Answers) {
     compatibility: 1.0
   };
 
+  // Calculate diversity bonus - users with more diverse answers get better matching
+  const categoryDiversity = new Set();
+  let totalAnswers = 0;
+
   // Process each answer
   for (const [questionId, answer1] of Object.entries(user1Answers)) {
     const answer2 = user2Answers[questionId];
     
     if (!answer2) continue; // Skip if other user hasn't answered
 
+    totalAnswers++;
+    
     // Get question metadata (category and type)
     const questionMeta = getQuestionMetadata(questionId);
     const weight = categoryWeights[questionMeta.category] || 1.0;
+    
+    categoryDiversity.add(questionMeta.category);
 
     // Calculate similarity score for this question (0-1)
     const similarity = calculateAnswerSimilarity(
@@ -54,6 +62,14 @@ export function calculateCompatibilityScore(user1Answers, user2Answers) {
 
   // Apply bonuses and penalties
   let finalScore = rawScore;
+
+  // Diversity bonus - more categories answered = better accuracy
+  const diversityBonus = (categoryDiversity.size / Object.keys(categoryWeights).length) * 0.5;
+  finalScore += diversityBonus;
+
+  // Answer completeness bonus - more total answers = higher confidence
+  const completenessBonus = Math.min(1.0, totalAnswers / 20) * 0.5;
+  finalScore += completenessBonus;
 
   // Bonus: Shared interests
   const interestBonus = calculateInterestBonus(user1Answers, user2Answers);

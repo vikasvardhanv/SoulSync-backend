@@ -232,9 +232,111 @@ router.get('/random/:count', optionalAuth, [
   }
 });
 
-// Submit user answer
+// Get personalized additional questions for better matching
+router.get('/additional-for-matching', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { limit = 5 } = req.query;
+
+    console.log(`🎯 Getting additional questions for user ${userId} to improve matching`);
+
+    // Get user's current answers
+    const userAnswers = await prisma.userAnswer.findMany({
+      where: { userId },
+      select: { questionId: true }
+    });
+
+    const answeredQuestionIds = userAnswers.map(a => a.questionId);
+    console.log(`📝 User has answered ${answeredQuestionIds.length} questions`);
+
+    // Get questions user hasn't answered yet, prioritized by weight and category diversity
+    const unansweredQuestions = await prisma.question.findMany({
+      where: {
+        id: { notIn: answeredQuestionIds },
+        isActive: true
+      },
+      orderBy: [
+        { weight: 'desc' }, // Higher weight questions first
+        { category: 'asc' }, // Diverse categories
+        { createdAt: 'asc' }
+      ],
+      take: parseInt(limit) * 3 // Get more to allow for category filtering
+    });
+
+    // Ensure category diversity in the selected questions
+    const categorizedQuestions = {};
+    const selectedQuestions = [];
+
+    // Group by category
+    unansweredQuestions.forEach(q => {
+      if (!categorizedQuestions[q.category]) {
+        categorizedQuestions[q.category] = [];
+      }
+      categorizedQuestions[q.category].push(q);
+    });
+
+    // Select questions from different categories to ensure diversity
+    const categories = Object.keys(categorizedQuestions);
+    let categoryIndex = 0;
+
+    while (selectedQuestions.length < parseInt(limit) && categoryIndex < categories.length * 3) {
+      const category = categories[categoryIndex % categories.length];
+      const questionsInCategory = categorizedQuestions[category];
+      
+      if (questionsInCategory && questionsInCategory.length > 0) {
+        const question = questionsInCategory.shift();
+        if (question && !selectedQuestions.find(q => q.id === question.id)) {
+          selectedQuestions.push(question);
+        }
+      }
+      categoryIndex++;
+    }
+
+    // If we still need more questions, fill from remaining
+    if (selectedQuestions.length < parseInt(limit)) {
+      const remaining = unansweredQuestions.filter(q => 
+        !selectedQuestions.find(sq => sq.id === q.id)
+      ).slice(0, parseInt(limit) - selectedQuestions.length);
+      selectedQuestions.push(...remaining);
+    }
+
+    // Calculate potential improvement score
+    const potentialImprovement = calculatePotentialMatchingImprovement(
+      answeredQuestionIds.length,
+      selectedQuestions.length
+    );
+
+    res.json({
+      success: true,
+      data: {
+        questions: selectedQuestions.slice(0, parseInt(limit)),
+        currentAnswersCount: answeredQuestionIds.length,
+        potentialImprovement,
+        message: `Answer ${selectedQuestions.length} more questions to improve your match probability by ${potentialImprovement}%`
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Get additional questions error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch additional questions'
+    });
+  }
+});
+
+/**
+ * Calculate potential improvement in matching probability
+ */
+function calculatePotentialMatchingImprovement(currentAnswers, additionalQuestions) {
+  const baseImprovement = Math.min(25, additionalQuestions * 5); // 5% per question, max 25%
+  const diminishingReturns = currentAnswers > 10 ? Math.max(0.5, 1 - (currentAnswers - 10) * 0.05) : 1;
+  return Math.round(baseImprovement * diminishingReturns);
+}
+
+// Submit answer to a question with progress tracking
 router.post('/:id/answer', authenticateToken, [
-  body('answer').notEmpty()
+  body('answer').notEmpty().withMessage('Answer is required')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -246,18 +348,20 @@ router.post('/:id/answer', authenticateToken, [
       });
     }
 
-    const { id } = req.params;
+    const { id: questionId } = req.params;
     const { answer } = req.body;
     const userId = req.user.id;
 
-    // Check if question exists
+    console.log(`📝 User ${userId} answering question ${questionId}`);
+
+    // Check if question exists and is active
     const question = await prisma.question.findFirst({
       where: {
-        id,
+        id: questionId,
         isActive: true
       }
     });
-    
+
     if (!question) {
       return res.status(404).json({
         success: false,
@@ -284,30 +388,74 @@ router.post('/:id/answer', authenticateToken, [
       }
     }
 
-    // Upsert answer
-    await prisma.userAnswer.upsert({
+    // Upsert the answer (create or update)
+    const userAnswer = await prisma.userAnswer.upsert({
       where: {
         userId_questionId: {
           userId,
-          questionId: id
+          questionId
         }
       },
       update: {
-        answer
+        answer,
+        updatedAt: new Date()
       },
       create: {
         userId,
-        questionId: id,
+        questionId,
         answer
       }
     });
 
+    // Get updated progress stats
+    const totalAnswered = await prisma.userAnswer.count({
+      where: { userId }
+    });
+
+    const totalQuestions = await prisma.question.count({
+      where: { isActive: true }
+    });
+
+    // Calculate matching improvement
+    const matchingReadiness = Math.min(100, Math.round((totalAnswered / 20) * 100));
+    const wasFirstAnswer = totalAnswered === 1;
+    const reachedMilestone = [5, 10, 15, 20, 25].includes(totalAnswered);
+
+    // Check if user now qualifies for better matches
+    let newMatchesPossible = false;
+    if (totalAnswered >= 5) {
+      // User now has enough answers for AI matching
+      newMatchesPossible = true;
+    }
+
     res.json({
       success: true,
-      message: 'Answer submitted successfully'
+      data: {
+        answer: userAnswer,
+        progress: {
+          totalAnswered,
+          totalQuestions,
+          completionPercentage: Math.round((totalAnswered / totalQuestions) * 100),
+          matchingReadiness,
+          milestones: {
+            wasFirstAnswer,
+            reachedMilestone,
+            milestoneNumber: reachedMilestone ? totalAnswered : null
+          },
+          newMatchesPossible
+        }
+      },
+      message: wasFirstAnswer 
+        ? 'Great start! Answer a few more questions to unlock AI matching'
+        : reachedMilestone 
+          ? `Milestone reached! ${totalAnswered} questions answered - your matching accuracy has improved`
+          : newMatchesPossible 
+            ? 'Answer saved! Check your matches to see new compatible people'
+            : 'Answer saved! Keep going to improve your match quality'
     });
+
   } catch (error) {
-    console.error('Submit answer error:', error);
+    console.error('❌ Submit answer error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to submit answer'
