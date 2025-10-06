@@ -20,7 +20,12 @@ model User {
   name        String
   age         Int?
   bio         String?
-  location    String?
+  location    String?  // Legacy field for backward compatibility
+  city        String?
+  state       String?
+  country     String?
+  latitude    Float?   // For precise distance calculations
+  longitude   Float?   // For precise distance calculations
   gender      String?  // male, female, non-binary, other, prefer-not-to-say
   lookingFor  String?  @map("looking_for") // male, female, non-binary, everyone
   interests   String[]

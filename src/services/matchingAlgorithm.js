@@ -84,6 +84,53 @@ export function calculateCompatibilityScore(user1Answers, user2Answers) {
 }
 
 /**
+ * Calculate location-based compatibility bonus
+ * @param {Object} user1 - First user's data including location
+ * @param {Object} user2 - Second user's data including location  
+ * @returns {number} Location bonus (0-2.0)
+ */
+function calculateLocationBonus(user1, user2) {
+  if (!user1.latitude || !user1.longitude || !user2.latitude || !user2.longitude) {
+    // If coordinates not available, check city/state match
+    if (user1.city && user2.city && user1.city.toLowerCase() === user2.city.toLowerCase()) {
+      return 2.0; // Same city
+    }
+    if (user1.state && user2.state && user1.state.toLowerCase() === user2.state.toLowerCase()) {
+      return 1.0; // Same state/province
+    }
+    if (user1.country && user2.country && user1.country.toLowerCase() === user2.country.toLowerCase()) {
+      return 0.5; // Same country
+    }
+    return 0.0;
+  }
+
+  // Calculate distance using coordinates
+  const distance = calculateDistance(user1.latitude, user1.longitude, user2.latitude, user2.longitude);
+  
+  // Distance-based bonus (closer = higher bonus)
+  if (distance <= 10) return 2.0;      // Within 10km
+  if (distance <= 25) return 1.5;      // Within 25km  
+  if (distance <= 50) return 1.0;      // Within 50km
+  if (distance <= 100) return 0.5;     // Within 100km
+  if (distance <= 500) return 0.2;     // Within 500km
+  return 0.0; // Too far
+}
+
+/**
+ * Calculate distance between two coordinates (Haversine formula)
+ */
+function calculateDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLng/2) * Math.sin(dLng/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c; // Distance in kilometers
+}
+
+/**
  * Calculate similarity between two answers
  * @param {any} answer1 - First user's answer
  * @param {any} answer2 - Second user's answer
@@ -312,6 +359,23 @@ export async function findCompatibleMatches(userId, prisma, limit = 10) {
             answer: true
           }
         }
+      },
+      // Include location data for distance calculations
+      select: {
+        id: true,
+        name: true,
+        location: true,
+        city: true,
+        state: true,
+        country: true,
+        latitude: true,
+        longitude: true,
+        answers: {
+          select: {
+            questionId: true,
+            answer: true
+          }
+        }
       }
     });
 
@@ -377,6 +441,26 @@ export async function findCompatibleMatches(userId, prisma, limit = 10) {
           }
         }
       },
+      select: {
+        id: true,
+        name: true,
+        age: true,
+        bio: true,
+        location: true,
+        city: true,
+        state: true, 
+        country: true,
+        latitude: true,
+        longitude: true,
+        interests: true,
+        photos: true,
+        answers: {
+          select: {
+            questionId: true,
+            answer: true
+          }
+        }
+      },
       take: 100 // Get more candidates to score
     });
 
@@ -395,10 +479,24 @@ export async function findCompatibleMatches(userId, prisma, limit = 10) {
         matchAnswers[a.questionId] = a.answer;
       });
 
-      const compatibilityScore = calculateCompatibilityScore(
+      // Base personality compatibility score
+      let compatibilityScore = calculateCompatibilityScore(
         currentUserAnswers,
         matchAnswers
       );
+
+      // Add location-based bonus
+      const locationBonus = calculateLocationBonus(currentUser, match);
+      compatibilityScore += locationBonus;
+
+      // Calculate distance for display
+      let distance = null;
+      if (currentUser.latitude && currentUser.longitude && match.latitude && match.longitude) {
+        distance = Math.round(calculateDistance(
+          currentUser.latitude, currentUser.longitude,
+          match.latitude, match.longitude
+        ));
+      }
 
       return {
         id: match.id,
@@ -406,9 +504,14 @@ export async function findCompatibleMatches(userId, prisma, limit = 10) {
         age: match.age,
         bio: match.bio,
         location: match.location,
+        city: match.city,
+        state: match.state,
+        country: match.country,
+        distance: distance, // Distance in km
         interests: match.interests,
         photos: match.photos,
-        compatibilityScore: Number(compatibilityScore.toFixed(1)),
+        compatibilityScore: Number(Math.min(10, compatibilityScore).toFixed(1)),
+        locationBonus: Number(locationBonus.toFixed(1)),
         answers: match.answers // Include for frontend if needed
       };
     });
