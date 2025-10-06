@@ -177,36 +177,24 @@ function calculateCommunicationBonus(user1Answers, user2Answers) {
 }
 
 /**
- * Find top compatible matches for a user
+ * Basic profile matching when quiz data is not available
  * @param {string} userId - The user to find matches for
  * @param {Object} prisma - Prisma client instance
  * @param {number} limit - Number of matches to return
- * @returns {Promise<Array>} Array of users with compatibility scores
+ * @returns {Promise<Array>} Array of users with basic compatibility
  */
-export async function findCompatibleMatches(userId, prisma, limit = 10) {
+async function findBasicProfileMatches(userId, prisma, limit = 10) {
   try {
-    // Get current user's answers
+    console.log('🔄 Using basic profile matching');
+    
+    // Get current user
     const currentUser = await prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        answers: {
-          select: {
-            questionId: true,
-            answer: true
-          }
-        }
-      }
+      where: { id: userId }
     });
 
-    if (!currentUser || !currentUser.answers || currentUser.answers.length === 0) {
-      throw new Error('User has not completed personality quiz');
+    if (!currentUser) {
+      return [];
     }
-
-    // Convert answers to object format
-    const currentUserAnswers = {};
-    currentUser.answers.forEach(a => {
-      currentUserAnswers[a.questionId] = a.answer;
-    });
 
     // Get existing matches to exclude
     const existingMatches = await prisma.match.findMany({
@@ -227,6 +215,135 @@ export async function findCompatibleMatches(userId, prisma, limit = 10) {
     );
     excludedIds.push(userId); // Exclude self
 
+    // Get potential matches based on basic criteria
+    const basicMatches = await prisma.user.findMany({
+      where: {
+        id: { notIn: excludedIds },
+        isActive: true,
+        age: currentUser.age ? {
+          gte: Math.max(18, currentUser.age - 10),
+          lte: currentUser.age + 10
+        } : undefined
+      },
+      select: {
+        id: true,
+        name: true,
+        age: true,
+        bio: true,
+        location: true,
+        interests: true,
+        photos: true
+      },
+      take: limit
+    });
+
+    // Add a basic compatibility score based on shared interests and location
+    const scoredBasicMatches = basicMatches.map(match => {
+      let score = 5.0; // Base score
+
+      // Location similarity
+      if (currentUser.location && match.location && 
+          currentUser.location.toLowerCase() === match.location.toLowerCase()) {
+        score += 1.0;
+      }
+
+      // Shared interests
+      if (currentUser.interests && match.interests) {
+        const userInterests = currentUser.interests.map(i => i.toLowerCase());
+        const matchInterests = match.interests.map(i => i.toLowerCase());
+        const sharedInterests = userInterests.filter(i => matchInterests.includes(i));
+        score += (sharedInterests.length * 0.5);
+      }
+
+      // Age compatibility (closer ages get higher scores)
+      if (currentUser.age && match.age) {
+        const ageDiff = Math.abs(currentUser.age - match.age);
+        score += Math.max(0, 2.0 - (ageDiff * 0.2));
+      }
+
+      return {
+        ...match,
+        compatibilityScore: Math.min(10, Number(score.toFixed(1)))
+      };
+    });
+
+    return scoredBasicMatches.sort((a, b) => b.compatibilityScore - a.compatibilityScore);
+    
+  } catch (error) {
+    console.error('❌ Error in basic profile matching:', error);
+    return [];
+  }
+}
+
+/**
+ * Find top compatible matches for a user
+ * @param {string} userId - The user to find matches for
+ * @param {Object} prisma - Prisma client instance
+ * @param {number} limit - Number of matches to return
+ * @returns {Promise<Array>} Array of users with compatibility scores
+ */
+export async function findCompatibleMatches(userId, prisma, limit = 10) {
+  try {
+    console.log(`🤖 Starting AI matching for user: ${userId}`);
+    
+    // Get current user's answers
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        answers: {
+          select: {
+            questionId: true,
+            answer: true
+          }
+        }
+      }
+    });
+
+    console.log(`👤 Current user found:`, {
+      id: currentUser?.id,
+      name: currentUser?.name,
+      answersCount: currentUser?.answers?.length || 0
+    });
+
+    if (!currentUser) {
+      throw new Error('User not found');
+    }
+
+    if (!currentUser.answers || currentUser.answers.length === 0) {
+      console.log('⚠️  User has not completed personality quiz');
+      // Return empty array instead of throwing error for better UX
+      return [];
+    }
+
+    // Convert answers to object format
+    const currentUserAnswers = {};
+    currentUser.answers.forEach(a => {
+      currentUserAnswers[a.questionId] = a.answer;
+    });
+
+    console.log(`📝 Current user has ${Object.keys(currentUserAnswers).length} answers`);
+
+    // Get existing matches to exclude
+    const existingMatches = await prisma.match.findMany({
+      where: {
+        OR: [
+          { userInitiatorId: userId },
+          { userReceiverId: userId }
+        ]
+      },
+      select: {
+        userInitiatorId: true,
+        userReceiverId: true
+      }
+    });
+
+    const excludedIds = existingMatches.map(m => 
+      m.userInitiatorId === userId ? m.userReceiverId : m.userInitiatorId
+    );
+    excludedIds.push(userId); // Exclude self
+
+    console.log(`🚫 Excluding ${excludedIds.length} users (existing matches + self)`);
+
     // Get potential matches (users who have completed quiz)
     const potentialMatches = await prisma.user.findMany({
       where: {
@@ -246,6 +363,14 @@ export async function findCompatibleMatches(userId, prisma, limit = 10) {
       },
       take: 100 // Get more candidates to score
     });
+
+    console.log(`🎯 Found ${potentialMatches.length} potential matches to score`);
+
+    // If no users with quiz answers, fall back to basic profile matching
+    if (potentialMatches.length === 0) {
+      console.log('🔄 No users with quiz answers found, falling back to basic profile matching');
+      return await findBasicProfileMatches(userId, prisma, limit);
+    }
 
     // Calculate compatibility scores for each potential match
     const scoredMatches = potentialMatches.map(match => {
@@ -278,10 +403,13 @@ export async function findCompatibleMatches(userId, prisma, limit = 10) {
       .slice(0, limit)
       .filter(match => match.compatibilityScore >= 6.0); // Only show decent matches
 
+    console.log(`🏆 Returning ${topMatches.length} top matches (score >= 6.0)`);
+
     return topMatches;
 
   } catch (error) {
-    console.error('Error finding compatible matches:', error);
+    console.error('❌ Error finding compatible matches:', error);
+    console.error('Error stack:', error.stack);
     throw error;
   }
 }

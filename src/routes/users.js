@@ -206,6 +206,8 @@ router.get('/matches', authenticateToken, requireProfile, async (req, res) => {
     const userId = req.user.id;
     const { limit = 10, offset = 0 } = req.query;
 
+    console.log(`🔍 Finding matches for user ${userId}, limit: ${limit}, offset: ${offset}`);
+
     // Use AI matching algorithm to find compatible matches
     const compatibleMatches = await findCompatibleMatches(
       userId, 
@@ -213,11 +215,28 @@ router.get('/matches', authenticateToken, requireProfile, async (req, res) => {
       parseInt(limit) + parseInt(offset)
     );
 
+    console.log(`✅ Found ${compatibleMatches.length} compatible matches`);
+
     // Apply pagination
     const paginatedMatches = compatibleMatches.slice(
       parseInt(offset),
       parseInt(offset) + parseInt(limit)
     );
+
+    // Determine appropriate message based on results
+    let message = 'Matches calculated using AI compatibility algorithm';
+    if (compatibleMatches.length === 0) {
+      // Check if current user has completed quiz
+      const userAnswers = await prisma.userAnswer.count({
+        where: { userId }
+      });
+      
+      if (userAnswers === 0) {
+        message = 'Complete your personality quiz to find compatible matches';
+      } else {
+        message = 'No compatible matches found. Try adjusting your preferences or check back later';
+      }
+    }
 
     res.json({
       success: true,
@@ -230,13 +249,18 @@ router.get('/matches', authenticateToken, requireProfile, async (req, res) => {
           hasMore: compatibleMatches.length > (parseInt(offset) + parseInt(limit))
         }
       },
-      message: 'Matches calculated using AI compatibility algorithm'
+      message
     });
   } catch (error) {
-    console.error('Get matches error:', error);
+    console.error('❌ Get matches error:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
-      message: error.message || 'Failed to fetch matches'
+      message: error.message || 'Failed to fetch matches',
+      ...(process.env.NODE_ENV === 'development' && { 
+        stack: error.stack,
+        details: error.toString()
+      })
     });
   }
 });
