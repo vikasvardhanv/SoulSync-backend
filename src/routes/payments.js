@@ -11,6 +11,8 @@ const router = express.Router();
 // NOWPayments API configuration
 const NOWPAYMENTS_API_URL = 'https://api.nowpayments.io/v1';
 const NOWPAYMENTS_API_KEY = process.env.NOWPAYMENTS_API_KEY;
+const PROMO_CODE = (process.env.PROMO_CODE || 'soulsync101').toLowerCase();
+const PROMO_DURATION_DAYS = parseInt(process.env.PROMO_DURATION_DAYS || '30', 10);
 
 // Helper function to make NOWPayments API calls
 const callNOWPaymentsAPI = async (endpoint, method = 'GET', data = null) => {
@@ -471,3 +473,86 @@ router.post('/webhook', async (req, res, next) => {
 });
 
 export default router;
+
+// Promo code redemption (grant subscription without payment)
+router.post('/promo', authenticateToken, [
+  body('code').isString().withMessage('Promo code is required')
+], async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const userId = req.user.id;
+    const rawCode = (req.body.code || '').trim().toLowerCase();
+
+    if (!rawCode || rawCode !== PROMO_CODE) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid promo code'
+      });
+    }
+
+    // Check for existing active premium/vip subscription
+    const existing = await prisma.subscription.findFirst({
+      where: {
+        userId,
+        status: 'active',
+        expiresAt: { gt: new Date() }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Calculate promo expiry
+    const now = new Date();
+    const expiresAt = new Date(now);
+    expiresAt.setDate(expiresAt.getDate() + PROMO_DURATION_DAYS);
+
+    if (!existing) {
+      // Create promo subscription
+      await prisma.subscription.create({
+        data: {
+          userId,
+          plan: 'premium',
+          status: 'active',
+          expiresAt
+        }
+      });
+    }
+
+    // Record a zero-amount payment for auditability
+    await prisma.payment.create({
+      data: {
+        userId,
+        amount: 0,
+        currency: 'USD',
+        status: 'completed',
+        provider: 'promo',
+        description: `Promo code redemption: ${req.body.code}`,
+        type: 'subscription',
+        metadata: { code: req.body.code, durationDays: PROMO_DURATION_DAYS }
+      }
+    });
+
+    const subscription = await prisma.subscription.findFirst({
+      where: { userId },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return res.json({
+      success: true,
+      message: 'Promo applied. Premium unlocked.',
+      data: {
+        subscription
+      }
+    });
+  } catch (error) {
+    console.error('Redeem promo error:', error);
+    next(error);
+  }
+});
