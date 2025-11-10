@@ -2,7 +2,7 @@ import express from 'express';
 import { query as queryValidator } from 'express-validator';
 import { authenticateToken } from '../middleware/auth.js';
 import { getAllCities, searchCities, calculateDistance } from '../data/locationData.js';
-import { geocodeAddress, autocomplete as geoAutocomplete } from '../services/geocodingService.js';
+import { geocodeAddress, autocomplete as geoAutocomplete, reverseGeocode } from '../services/geocodingService.js';
 
 const router = express.Router();
 
@@ -145,7 +145,8 @@ router.get('/stats', async (req, res) => {
 export default router;
  
 // Address validation endpoint
-router.post('/validate', authenticateToken, async (req, res) => {
+// Validation should be public (no auth) for signup
+router.post('/validate', async (req, res) => {
   try {
     const { address } = req.body || {};
     if (!address || address.length < 3) {
@@ -160,7 +161,22 @@ router.post('/validate', authenticateToken, async (req, res) => {
 });
 
 // Autocomplete endpoint
-router.get('/autocomplete', authenticateToken, async (req, res) => {
+// Autocomplete should be public
+router.get('/autocomplete', async (req, res) => {
+// Reverse geocode coordinates -> address (public)
+router.get('/reverse', async (req, res) => {
+  try {
+    const { lat, lng } = req.query;
+    if (lat === undefined || lng === undefined) {
+      return res.status(400).json({ success: false, message: 'lat and lng are required' });
+    }
+    const result = await reverseGeocode(parseFloat(String(lat)), parseFloat(String(lng)));
+    return res.status(result.success ? 200 : 422).json(result);
+  } catch (error) {
+    console.error('Reverse geocode error:', error);
+    res.status(500).json({ success: false, message: 'Failed to reverse geocode coordinates' });
+  }
+});
   try {
     const { query } = req.query;
     if (!query || String(query).length < 2) {

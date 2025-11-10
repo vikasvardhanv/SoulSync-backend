@@ -116,3 +116,68 @@ async function autocomplete(query) {
 }
 
 export { geocodeAddress, autocomplete };
+ 
+// Reverse geocoding from coordinates to address
+async function reverseGeocode(lat, lng) {
+  if (typeof lat !== 'number' || typeof lng !== 'number') {
+    return { success: false, message: 'Invalid coordinates', candidates: [] };
+  }
+  if (!API_KEY && PROVIDER !== 'NOMINATIM') {
+    console.warn('GEOCODING_API_KEY missing – returning empty result');
+    return { success: false, message: 'Geocoding API key not configured', candidates: [] };
+  }
+
+  try {
+    let url;
+    switch (PROVIDER) {
+      case 'OPENCAGE':
+        url = `https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(lat + ',' + lng)}&key=${API_KEY}&limit=1&no_annotations=1`;
+        break;
+      case 'NOMINATIM':
+        url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&addressdetails=1`;
+        break;
+      case 'GOOGLE':
+        url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${encodeURIComponent(lat + ',' + lng)}&key=${API_KEY}`;
+        break;
+      default:
+        return { success: false, message: 'Unsupported provider', candidates: [] };
+    }
+
+    const resp = await fetch(url, {
+      headers: PROVIDER === 'NOMINATIM' ? { 'User-Agent': 'SoulSync/1.0 (contact@soulsync.solutions)' } : {}
+    });
+    if (!resp.ok) {
+      return { success: false, message: `Provider error HTTP ${resp.status}`, candidates: [] };
+    }
+    const data = await resp.json();
+
+    let results = [];
+    if (PROVIDER === 'OPENCAGE') {
+      results = (data.results || []).map(normalizeResult).filter(Boolean);
+    } else if (PROVIDER === 'NOMINATIM') {
+      const item = data || null;
+      if (item) {
+        item.address = item.address || {};
+        results = [normalizeResult(item)].filter(Boolean);
+      }
+    } else if (PROVIDER === 'GOOGLE') {
+      results = (data.results || []).map(normalizeResult).filter(Boolean);
+    }
+
+    if (results.length === 0) {
+      return { success: false, message: 'No reverse geocoding results', candidates: [] };
+    }
+
+    return {
+      success: true,
+      message: 'Reverse geocoding successful',
+      candidates: results,
+      best: results[0]
+    };
+  } catch (err) {
+    console.error('Reverse geocode error:', err);
+    return { success: false, message: 'Reverse geocoding failed', candidates: [] };
+  }
+}
+
+export { reverseGeocode };
