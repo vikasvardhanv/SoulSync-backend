@@ -255,12 +255,15 @@ app.use(notFound);
 app.use(errorHandler);
 
 // Start the server (only for local development, not during tests)
-if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL && process.env.NODE_ENV !== 'test') {
+// Start server in all environments unless running tests or Vercel serverless
+if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
   const PORT = process.env.PORT || 5001;
   app.listen(PORT, () => {
     console.log(`✅ SoulSync Backend server running on port ${PORT}`);
-    console.log(`🌐 Server URL: http://localhost:${PORT}`);
-    console.log(`🎉 API Base URL: http://localhost:${PORT}/api`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`🌐 Server URL: http://localhost:${PORT}`);
+      console.log(`🎉 API Base URL: http://localhost:${PORT}/api`);
+    }
   });
 }
 

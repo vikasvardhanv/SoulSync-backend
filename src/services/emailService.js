@@ -7,7 +7,8 @@ class EmailService {
   constructor() {
     // Only create transporter if email credentials are provided
     if (process.env.EMAIL_USER && process.env.EMAIL_APP_PASSWORD) {
-      this.transporter = nodemailer.createTransporter({
+      // Use nodemailer's createTransport API
+      this.transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
           user: process.env.EMAIL_USER,
@@ -19,7 +20,7 @@ class EmailService {
         socketTimeout: 10000 // 10 seconds
       });
     } else {
-      console.warn('⚠️  Email service disabled - EMAIL_USER and EMAIL_APP_PASSWORD not configured');
+  console.warn('⚠️  Email service disabled - EMAIL_USER and EMAIL_APP_PASSWORD not configured');
       this.transporter = null;
     }
   }
