@@ -21,7 +21,8 @@ COPY --chown=nodejs:nodejs prisma ./prisma/
 USER nodejs
 
 # Install dependencies (use ci for production builds)
-RUN npm ci --only=production && npm cache clean --force
+# Use --omit=dev instead of deprecated --only=production
+RUN npm ci --omit=dev && npm cache clean --force
 
 # Copy source code
 COPY --chown=nodejs:nodejs src ./src/

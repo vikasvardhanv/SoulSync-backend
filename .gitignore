@@ -3,7 +3,8 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-package-lock.json
+# Keep lockfile committed for reproducible installs
+# package-lock.json
 yarn.lock
 
 # Environment variables
@@ -153,3 +154,4 @@ deploy.sh
 .vercel
 RENDER-DEPLOYMENT.md
 test-api.js
+.env*.local
