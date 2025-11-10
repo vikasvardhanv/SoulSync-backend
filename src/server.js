@@ -217,8 +217,6 @@ if (process.env.NODE_ENV !== 'production') {
 
 // API routes
 app.use('/api/auth', authRoutes);
-// Backward-compatible alias (without /api prefix) for legacy clients hitting /auth/*
-app.use('/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/questions', questionRoutes);
 app.use('/api/matches', matchRoutes);
