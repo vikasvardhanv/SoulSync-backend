@@ -254,8 +254,8 @@ app.use(notFound);
 // Global error handler
 app.use(errorHandler);
 
-// Start the server (only for local development)
-if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+// Start the server (only for local development, not during tests)
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL && process.env.NODE_ENV !== 'test') {
   const PORT = process.env.PORT || 5001;
   app.listen(PORT, () => {
     console.log(`✅ SoulSync Backend server running on port ${PORT}`);

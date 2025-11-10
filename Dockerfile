@@ -7,9 +7,10 @@ RUN apk add --no-cache dumb-init
 # Set working directory
 WORKDIR /app
 
-# Create non-root user first
+# Create non-root user first and ensure /app is writable by that user
 RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001 -G nodejs
+  adduser -S nodejs -u 1001 -G nodejs && \
+  chown -R nodejs:nodejs /app
 
 # Copy package files
 COPY --chown=nodejs:nodejs package*.json ./
