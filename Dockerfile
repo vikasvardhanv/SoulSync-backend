@@ -7,26 +7,24 @@ RUN apk add --no-cache dumb-init
 # Set working directory
 WORKDIR /app
 
-# Create non-root user first and ensure /app is writable by that user
-RUN addgroup -g 1001 -S nodejs && \
-  adduser -S nodejs -u 1001 -G nodejs && \
-  chown -R nodejs:nodejs /app
+# Ensure /app is writable by built-in non-root user 'node' and create node_modules ahead of time
+RUN mkdir -p /app/node_modules && chown -R node:node /app
 
 # Copy package files
-COPY --chown=nodejs:nodejs package*.json ./
+COPY --chown=node:node package*.json ./
 
 # Copy Prisma schema
-COPY --chown=nodejs:nodejs prisma ./prisma/
+COPY --chown=node:node prisma ./prisma/
 
 # Switch to node user for npm install
-USER nodejs
+USER node
 
 # Install dependencies (use ci for production builds)
 # Use --omit=dev instead of deprecated --only=production
 RUN npm ci --omit=dev && npm cache clean --force
 
 # Copy source code
-COPY --chown=nodejs:nodejs src ./src/
+COPY --chown=node:node src ./src/
 
 # Generate Prisma client
 RUN npm run prisma:generate
