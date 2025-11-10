@@ -119,35 +119,26 @@ app.use((err, req, res, next) => {
 // Compression middleware
 app.use(compression());
 
-// Startup logs
-console.info('🔰 Initializing SoulSync Backend');
-console.info('Environment:', process.env.NODE_ENV || 'undefined');
-console.info('Vercel:', process.env.VERCEL ? 'yes' : 'no');
-console.info('API base routes will be mounted under /api');
+// Production-optimized logging
+if (process.env.NODE_ENV !== 'production') {
+  console.info('🔰 Initializing SoulSync Backend');
+  console.info('Environment:', process.env.NODE_ENV || 'development');
+  console.info('API base routes will be mounted under /api');
+}
 
-// Request logging middleware (structured, lightweight)
-app.use((req, res, next) => {
-  const start = Date.now();
-  const remoteIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-  console.info(`➡️  ${req.method} ${req.originalUrl} - from: ${remoteIp}`);
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    console.info(`✅  ${req.method} ${req.originalUrl} - ${res.statusCode} (${duration}ms)`);
+// Request logging (only in development and staging)
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      console.info(`${req.method} ${req.originalUrl} - ${res.statusCode} (${duration}ms)`);
+    });
+    next();
   });
-  next();
-});
+}
 
-// Enhanced logging middleware
-console.log(`🚀 [${new Date().toISOString()}] SoulSync Backend initializing...`, {
-  environment: process.env.NODE_ENV,
-  isVercel: !!process.env.VERCEL,
-  nodeVersion: process.version,
-  corsOrigin: process.env.CORS_ORIGIN,
-  databaseUrl: process.env.PRISMA_DATABASE_URL ? 'configured' : 'missing',
-  jwtSecret: process.env.JWT_SECRET ? 'configured' : 'missing'
-});
-
-// Use enhanced API logging for all environments
+// Use enhanced API logging
 app.use(apiLogger);
 
 // Add error logging middleware (before error handlers)
@@ -210,20 +201,19 @@ import imageRoutes from './routes/images.js';
 import notificationRoutes from './routes/notifications.js';
 import locationRoutes from './routes/locations.js';
 
-// Debug endpoint for production testing
-app.all('/api/debug', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Debug endpoint working',
-    method: req.method,
-    path: req.path,
-    headers: req.headers,
-    body: req.body,
-    query: req.query,
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV
+// Debug endpoint (only in non-production environments)
+if (process.env.NODE_ENV !== 'production') {
+  app.all('/api/debug', (req, res) => {
+    res.json({
+      success: true,
+      message: 'Debug endpoint working',
+      method: req.method,
+      path: req.path,
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV
+    });
   });
-});
+}
 
 // API routes
 app.use('/api/auth', authRoutes);
@@ -237,21 +227,15 @@ app.use('/api/images', imageRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/locations', locationRoutes);
 
-// Log mounted routes summary
-console.info('📡 Mounted API routes:');
-console.info(' - /health');
-console.info(' - /api/health');
-console.info(' - /api/debug');
-console.info(' - /api/auth');
-console.info(' - /api/users');
-console.info(' - /api/questions');
-console.info(' - /api/matches');
-console.info(' - /api/messages');
-console.info(' - /api/subscriptions');
-console.info(' - /api/payments');
-console.info(' - /api/images');
-console.info(' - /api/notifications');
-console.info(' - /api/locations');
+// Log mounted routes summary (only in development)
+if (process.env.NODE_ENV !== 'production') {
+  console.info('📡 Mounted API routes:');
+  console.info(' - /health, /api/health');
+  console.info(' - /api/auth, /api/users, /api/questions');
+  console.info(' - /api/matches, /api/messages');
+  console.info(' - /api/subscriptions, /api/payments');
+  console.info(' - /api/images, /api/notifications, /api/locations');
+}
 
 // Catch-all route for undefined endpoints
 app.all('*', (req, res) => {

@@ -151,3 +151,5 @@ deploy.sh
 
 # Vercel (legacy)
 .vercel
+RENDER-DEPLOYMENT.md
+test-api.js

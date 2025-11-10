@@ -1,436 +1,333 @@
 # SoulSync Backend API
 
-A Node.js/Express backend API for the SoulSync spiritual connection and dating platform. This is a standalone, production-ready backend server that can be deployed independently of the frontend.
+A spiritual connection and dating platform backend built with Node.js, Express, and PostgreSQL.
 
-## 🌟 Features
+## 🚀 Features
 
-- **RESTful API** with comprehensive endpoints for user management, matching, messaging, and payments
-- **Authentication & Authorization** with JWT tokens and refresh tokens
-- **Database Management** with Prisma ORM and PostgreSQL
-- **File Upload** integration with Cloudinary
-- **Payment Processing** with PayPal and crypto payment support
-- **Email Services** with Nodemailer
-- **Rate Limiting** and security middleware
-- **Health Monitoring** with built-in health check endpoints
-- **Production Ready** with Docker, PM2, and Nginx configurations
-
-## 🛠 Tech Stack
-
-- **Runtime**: Node.js 20+
-- **Framework**: Express.js
-- **Database**: PostgreSQL with Prisma ORM
-- **Authentication**: JWT (JSON Web Tokens)
-- **File Storage**: Cloudinary
- - **File Storage**: Database-backed (Cloudinary removed)
-- **Email**: Nodemailer
-- **Process Manager**: PM2
-- **Containerization**: Docker & Docker Compose
-- **Reverse Proxy**: Nginx
-- **Payment**: PayPal API, Coinbase Commerce
+- **Authentication & Authorization**: JWT-based authentication with refresh tokens
+- **User Management**: Profile creation, editing, and image uploads
+- **AI-Powered Matching**: Compatibility algorithm based on personality quizzes
+- **Real-time Messaging**: Chat system for matched users
+- **Payment Integration**: NOWPayments crypto payment support
+- **Subscription Management**: Premium and VIP subscription tiers
+- **Notifications**: Real-time notifications for matches and messages
+- **Location-based Matching**: Find matches near you
+- **Question Bank**: Dynamic personality and compatibility questions
 
 ## 📋 Prerequisites
 
-Before running this application, ensure you have:
+- Node.js >= 18.0.0
+- PostgreSQL database
+- npm >= 8.0.0
 
-- Node.js 18+ installed
-- PostgreSQL database (local or cloud)
-- npm or yarn package manager
-- Docker (optional, for containerized deployment)
-- PM2 (optional, for process management)
+## 🛠️ Installation
 
-## 🚀 Quick Start
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/vikasvardhanv/soulsync-backend.git
+   cd soulsync-backend
+   ```
 
-### 1. Clone and Setup
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
-```bash
-git clone https://github.com/your-username/soulsync-backend.git
-cd soulsync-backend
-npm install
-```
+3. **Configure environment variables**
+   
+   Create a `.env` file in the root directory:
+   ```env
+   # Server Configuration
+   PORT=5001
+   NODE_ENV=production
+   
+   # Database Configuration
+   PRISMA_DATABASE_URL="your_prisma_accelerate_url"
+   DATABASE_URL="your_postgres_connection_string"
+   
+   # JWT Configuration
+   JWT_SECRET="your_strong_jwt_secret"
+   JWT_EXPIRES_IN="7d"
+   JWT_REFRESH_SECRET="your_strong_refresh_secret"
+   JWT_REFRESH_EXPIRES_IN="30d"
+   
+   # OpenAI Configuration (optional)
+   OPENAI_API_KEY="your_openai_api_key"
+   
+   # NOWPayments Configuration
+   NOWPAYMENTS_API_KEY="your_nowpayments_api_key"
+   NOWPAYMENTS_IPN_SECRET="your_nowpayments_ipn_secret"
+   
+   # Email Configuration
+   EMAIL_SERVICE="gmail"
+   EMAIL_HOST="smtp.gmail.com"
+   EMAIL_PORT="587"
+   EMAIL_USER="your_email@gmail.com"
+   EMAIL_PASS="your_app_password"
+   EMAIL_FROM="SoulSync <noreply@soulsync.solutions>"
+   
+   # Security
+   BCRYPT_ROUNDS=12
+   CORS_ORIGIN="https://your-frontend-domain.com"
+   
+   # Frontend URL
+   FRONTEND_URL="https://your-frontend-domain.com"
+   ```
 
-### 2. Environment Configuration
+4. **Run database migrations**
+   ```bash
+   npm run prisma:migrate:deploy
+   ```
 
-```bash
-cp .env.example .env
-```
+5. **Seed the database (optional)**
+   ```bash
+   npm run seed
+   ```
 
-Edit `.env` file with your actual configuration values:
+## 🚀 Running the Application
 
-```env
-# Database
-DATABASE_URL="postgresql://username:password@localhost:5432/soulsync_db"
-
-# JWT Secrets
-JWT_SECRET="your-super-secret-jwt-key-at-least-32-characters-long"
-JWT_REFRESH_SECRET="your-super-secret-refresh-key-different-from-jwt-secret"
-
-# CORS Configuration
-CORS_ORIGIN="https://soulsync.solutions,https://www.soulsync.solutions"
-
-# Cloudinary (Image Upload)
-Note: Cloudinary integration has been removed. Images are stored in the database or another configured provider.
-# Email Configuration
-SMTP_USER="your-email@gmail.com"
-SMTP_PASS="your-app-password"
-
-# External APIs
-OPENAI_API_KEY="sk-your-openai-api-key-here"
-PAYPAL_CLIENT_ID="your-paypal-client-id"
-PAYPAL_CLIENT_SECRET="your-paypal-client-secret"
-```
-
-### 3. Database Setup
-
-```bash
-# Generate Prisma client
-npm run prisma:generate
-
-# Run database migrations
-npm run prisma:migrate:deploy
-
-# (Optional) Seed database with initial data
-npm run seed
-```
-
-### 4. Start Development Server
-
+### Development Mode
 ```bash
 npm run dev
 ```
 
-The API will be available at `http://localhost:5001`
-
-## 🐳 Docker Deployment
-
-### Development with Docker Compose
-
+### Production Mode
 ```bash
-# Start all services (backend + database)
+npm start
+```
+
+### Using Docker
+```bash
+# Development
 npm run docker:dev
 
-# Or manually:
-docker-compose up --build
-```
-
-### Production with Docker
-
-```bash
-# Build and run production containers
+# Production
 npm run docker:prod
-
-# Or manually:
-docker-compose -f docker-compose.prod.yml up --build
 ```
 
-## 🔧 Production Deployment
-
-### Method 1: PM2 Process Manager
-
+### Using PM2
 ```bash
-# Install PM2 globally
-npm install -g pm2
-
-# Start production server
 npm run pm2:start
-
-# Monitor processes
-pm2 monit
-
-# View logs
 npm run pm2:logs
+npm run pm2:restart
+npm run pm2:stop
 ```
 
-### Method 2: Manual Deployment Script
-
-```bash
-# Make deployment script executable
-chmod +x deploy.sh
-
-# Deploy to production
-./deploy.sh production
-
-# Deploy to staging
-./deploy.sh staging
-```
-
-### Method 3: Docker Production
-
-```bash
-# Build production image
-docker build -t soulsync-backend:production .
-
-# Run with docker-compose
-docker-compose -f docker-compose.prod.yml up -d
-```
-
-## 🌐 Nginx Configuration
-
-For production deployments with Nginx reverse proxy:
-
-1. Copy the nginx configuration:
-```bash
-sudo cp nginx/nginx.conf /etc/nginx/sites-available/soulsync-backend
-sudo ln -s /etc/nginx/sites-available/soulsync-backend /etc/nginx/sites-enabled/
-```
-
-2. Add your SSL certificates to `nginx/ssl/` directory:
-   - `soulsync.solutions.crt`
-   - `soulsync.solutions.key`
-
-3. Test and reload Nginx:
-```bash
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-## 🔒 SSL/HTTPS Setup
-
-### Option 1: Let's Encrypt (Recommended)
-
-```bash
-# Install Certbot
-sudo apt install certbot python3-certbot-nginx
-
-# Obtain SSL certificate
-sudo certbot --nginx -d api.soulsync.solutions
-
-# Auto-renewal (add to cron)
-sudo crontab -e
-# Add: 0 12 * * * /usr/bin/certbot renew --quiet
-```
-
-### Option 2: Custom Certificates
-
-Place your SSL certificates in the `nginx/ssl/` directory:
-- `soulsync.solutions.crt` (Certificate file)
-- `soulsync.solutions.key` (Private key file)
-
-## 📊 Monitoring & Health Checks
-
-### Health Check Endpoint
-
-```bash
-curl http://localhost:5001/health
-```
-
-Response:
-```json
-{
-  "status": "OK",
-  "message": "SoulSync Backend is running",
-  "timestamp": "2024-01-01T00:00:00.000Z",
-  "environment": "production",
-  "version": "1.0.0"
-}
-```
-
-### PM2 Monitoring
-
-```bash
-# View all processes
-pm2 list
-
-# Monitor resources
-pm2 monit
-
-# View logs
-pm2 logs soulsync-backend
-
-# Restart application
-pm2 restart soulsync-backend
-```
-
-## 🏗 API Endpoints
+## 📡 API Endpoints
 
 ### Authentication
-- `POST /api/auth/register` - User registration
-- `POST /api/auth/login` - User login
-- `POST /api/auth/logout` - User logout
-- `POST /api/auth/refresh` - Refresh JWT token
-- `POST /api/auth/forgot-password` - Password reset request
+- `POST /api/auth/register` - Register a new user
+- `POST /api/auth/login` - Login user
+- `POST /api/auth/logout` - Logout user
+- `POST /api/auth/refresh` - Refresh access token
+- `GET /api/auth/verify-email` - Verify email
+- `POST /api/auth/forgot-password` - Request password reset
+- `POST /api/auth/reset-password` - Reset password
+- `GET /api/auth/me` - Get current user
 
 ### Users
 - `GET /api/users/profile` - Get user profile
 - `PUT /api/users/profile` - Update user profile
-- `POST /api/users/upload-photo` - Upload profile photo
-- `DELETE /api/users/account` - Delete user account
+- `GET /api/users/matches` - Get potential matches
+- `DELETE /api/users/account` - Delete account
 
-### Matches & Discovery
-- `GET /api/matches/discover` - Discover potential matches
-- `POST /api/matches/like` - Like a user
-- `POST /api/matches/pass` - Pass on a user
-- `GET /api/matches/mutual` - Get mutual matches
+### Matches
+- `GET /api/matches` - Get all matches
+- `POST /api/matches` - Create a new match
+- `PUT /api/matches/:id/status` - Update match status
+- `GET /api/matches/pending` - Get pending matches
+- `GET /api/matches/accepted` - Get accepted matches
 
 ### Messages
-- `GET /api/messages/:matchId` - Get messages for a match
+- `GET /api/messages/conversations` - Get all conversations
+- `GET /api/messages/conversation/:userId` - Get conversation with user
 - `POST /api/messages` - Send a message
-- `PUT /api/messages/:id/read` - Mark message as read
+- `PUT /api/messages/read/:senderId` - Mark messages as read
+- `GET /api/messages/unread/count` - Get unread message count
 
-### Subscriptions & Payments
-- `GET /api/subscriptions/plans` - Get subscription plans
-- `POST /api/payments/create-paypal-order` - Create PayPal payment
-- `POST /api/payments/capture-paypal-order` - Capture PayPal payment
+### Questions
+- `GET /api/questions` - Get all questions
+- `GET /api/questions/random/:count` - Get random questions
+- `POST /api/questions/:id/answer` - Submit answer
+- `GET /api/questions/answers/me` - Get my answers
 
-### Questions & Compatibility
-- `GET /api/questions` - Get compatibility questions
-- `POST /api/questions/answers` - Submit question answers
+### Payments
+- `GET /api/payments/currencies` - Get available currencies
+- `POST /api/payments/estimate` - Estimate payment
+- `POST /api/payments/create` - Create payment
+- `GET /api/payments/status/:id` - Get payment status
+- `POST /api/payments/subscription` - Create subscription payment
 
-## 🔧 Environment Variables Reference
+### Subscriptions
+- `GET /api/subscriptions/me` - Get my subscription
+- `POST /api/subscriptions` - Create subscription
+- `PUT /api/subscriptions/cancel` - Cancel subscription
 
-| Variable | Required | Description | Example |
-|----------|----------|-------------|---------|
-| `DATABASE_URL` | ✅ | PostgreSQL connection string | `postgresql://user:pass@localhost:5432/db` |
-| `JWT_SECRET` | ✅ | JWT signing secret (32+ chars) | `your-super-secret-jwt-key` |
-| `JWT_REFRESH_SECRET` | ✅ | JWT refresh secret | `your-refresh-secret` |
-| `CORS_ORIGIN` | ✅ | Allowed frontend origins | `https://soulsync.solutions` |
-| `CLOUDINARY_CLOUD_NAME` | ✅ | Cloudinary cloud name | `your-cloud-name` |
-| `CLOUDINARY_API_KEY` | ✅ | Cloudinary API key | `123456789012345` |
-| `CLOUDINARY_API_SECRET` | ✅ | Cloudinary API secret | `your-api-secret` |
-| `SMTP_USER` | ❌ | Email SMTP username | `noreply@soulsync.solutions` |
-| `SMTP_PASS` | ❌ | Email SMTP password | `your-app-password` |
-| `OPENAI_API_KEY` | ❌ | OpenAI API key for AI features | `sk-your-openai-key` |
-| `PAYPAL_CLIENT_ID` | ❌ | PayPal client ID | `your-paypal-client-id` |
-| `PAYPAL_CLIENT_SECRET` | ❌ | PayPal client secret | `your-paypal-secret` |
+### Images
+- `POST /api/images/upload` - Upload single image
+- `POST /api/images/upload-multiple` - Upload multiple images
+- `DELETE /api/images/delete` - Delete image
+- `PUT /api/images/reorder` - Reorder photos
 
-## 🧪 Testing
+### Notifications
+- `GET /api/notifications` - Get all notifications
+- `PUT /api/notifications/:id/read` - Mark notification as read
+- `PUT /api/notifications/read-all` - Mark all as read
 
-```bash
-# Run health check
-curl http://localhost:5001/health
+### Locations
+- `GET /api/locations/cities` - Get cities
+- `GET /api/locations/cities/country/:country` - Get cities by country
+- `GET /api/locations/cities/nearby` - Get nearby cities
 
-# Test API endpoints
-curl http://localhost:5001/api/auth/register -X POST \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"password123"}'
+## 🏗️ Project Structure
+
+```
+soulsync-backend/
+├── prisma/
+│   ├── schema.prisma          # Database schema
+│   └── migrations/            # Database migrations
+├── src/
+│   ├── server.js              # Main server file
+│   ├── database/
+│   │   ├── connection.js      # Database connection
+│   │   └── seed.js            # Database seeding
+│   ├── middleware/
+│   │   ├── auth.js            # Authentication middleware
+│   │   ├── errorHandler.js   # Error handling middleware
+│   │   └── logger.js          # Logging middleware
+│   ├── routes/
+│   │   ├── auth.js            # Authentication routes
+│   │   ├── users.js           # User routes
+│   │   ├── matches.js         # Match routes
+│   │   ├── messages.js        # Message routes
+│   │   ├── questions.js       # Question routes
+│   │   ├── payments.js        # Payment routes
+│   │   ├── subscriptions.js   # Subscription routes
+│   │   ├── images.js          # Image routes
+│   │   ├── notifications.js   # Notification routes
+│   │   └── locations.js       # Location routes
+│   ├── services/
+│   │   ├── emailService.js    # Email service
+│   │   ├── matchingAlgorithm.js  # Matching algorithm
+│   │   └── enhancedMatching.js   # Enhanced matching
+│   └── data/
+│       └── locationData.js    # Location data
+├── .env                       # Environment variables
+├── package.json               # Dependencies
+├── Dockerfile                 # Docker configuration
+├── docker-compose.yml         # Docker Compose config
+└── ecosystem.config.js        # PM2 configuration
 ```
 
-## 📋 Database Management
+## 🔒 Security Features
 
-### Prisma Commands
+- **JWT Authentication**: Secure token-based authentication
+- **Password Hashing**: bcrypt with configurable rounds
+- **Rate Limiting**: Prevent abuse and DDoS attacks
+- **CORS Protection**: Configurable CORS origins
+- **Helmet.js**: Security headers
+- **Input Validation**: express-validator for all inputs
+- **SQL Injection Protection**: Prisma ORM parameterized queries
+
+## 🗄️ Database Schema
+
+The application uses PostgreSQL with Prisma ORM. Key models include:
+
+- **User**: User accounts and profiles
+- **Match**: User matches and compatibility scores
+- **Message**: Chat messages between matched users
+- **Question**: Personality and compatibility questions
+- **UserAnswer**: User responses to questions
+- **Subscription**: Premium subscription management
+- **Payment**: Payment transactions
+- **Notification**: User notifications
+- **Image**: User uploaded images
+
+## 📊 Matching Algorithm
+
+The matching algorithm considers:
+
+1. **Personality Compatibility** (weight: 2.5)
+2. **Values Alignment** (weight: 2.5)
+3. **Lifestyle Compatibility** (weight: 1.5)
+4. **Communication Style** (weight: 1.5)
+5. **Relationship Goals** (weight: 1.0)
+6. **Location Proximity** (bonus: up to 2.0)
+7. **Shared Interests** (bonus: up to 1.0)
+
+Compatibility scores range from 0-10, with higher scores indicating better matches.
+
+## 🚀 Deployment to Render.com (Recommended - FREE)
+
+### Quick Deploy (5 minutes):
+
+1. **Create Render Account**
+   - Go to https://render.com
+   - Sign up with GitHub (NO credit card required)
+
+2. **Create New Web Service**
+   - Click "New +" → "Web Service"
+   - Connect your GitHub repository
+   - Select "soulsync-backend"
+
+3. **Configure Service**
+   - Name: `soulsync-backend`
+   - Region: Choose closest to you
+   - Branch: `main`
+   - Build Command: `npm install`
+   - Start Command: `npm start`
+   - Instance Type: **Free**
+
+4. **Add Environment Variables**
+   - Copy from your `.env` file
+   - Add each variable in Render dashboard
+
+5. **Deploy**
+   - Click "Create Web Service"
+   - Wait 3-5 minutes
+   - Your API will be at: `https://soulsync-backend.onrender.com`
+
+See `RENDER-DEPLOYMENT.md` for detailed instructions.
+
+### Docker Deployment
 
 ```bash
-# Generate Prisma client
-npm run prisma:generate
-
-# Run migrations (development)
-npm run prisma:migrate:dev
-
-# Deploy migrations (production)
-npm run prisma:migrate:deploy
-
-# Reset database (development only)
-npm run prisma:reset
-
-# Open Prisma Studio
-npm run prisma:studio
+docker build -t soulsync-backend .
+docker run -p 5001:5001 --env-file .env soulsync-backend
 ```
 
-### Backup & Restore
+## 📝 Environment Variables
 
-```bash
-# Create database backup
-pg_dump $DATABASE_URL > backup_$(date +%Y%m%d_%H%M%S).sql
-
-# Restore from backup
-psql $DATABASE_URL < backup_file.sql
-```
-
-## 🔍 Troubleshooting
-
-### Common Issues
-
-1. **Port already in use**
-   ```bash
-   # Find process using port 5001
-   lsof -i :5001
-   # Kill the process
-   kill -9 <PID>
-   ```
-
-2. **Database connection issues**
-   - Check if PostgreSQL is running
-   - Verify DATABASE_URL format
-   - Check firewall settings
-
-3. **Prisma migration errors**
-   ```bash
-   # Reset and regenerate
-   npm run prisma:reset
-   npm run prisma:generate
-   ```
-
-4. **Permission errors (Linux/Mac)**
-   ```bash
-   # Fix log directory permissions
-   sudo chown -R $USER:$USER logs/
-   chmod 755 logs/
-   ```
-
-### Logs & Debugging
-
-```bash
-# PM2 logs
-pm2 logs soulsync-backend
-
-# Docker logs
-docker-compose logs soulsync-backend
-
-# Application logs (if using file logging)
-tail -f logs/combined.log
-```
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `PORT` | Server port | Yes |
+| `NODE_ENV` | Environment (development/production) | Yes |
+| `PRISMA_DATABASE_URL` | Prisma Accelerate URL | Yes |
+| `DATABASE_URL` | PostgreSQL connection string | Yes |
+| `JWT_SECRET` | JWT signing secret | Yes |
+| `JWT_REFRESH_SECRET` | JWT refresh token secret | Yes |
+| `NOWPAYMENTS_API_KEY` | NOWPayments API key | No |
+| `EMAIL_USER` | Email service username | No |
+| `EMAIL_PASS` | Email service password | No |
+| `CORS_ORIGIN` | Allowed CORS origins | Yes |
+| `FRONTEND_URL` | Frontend application URL | Yes |
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Commit your changes: `git commit -m 'Add amazing feature'`
-4. Push to the branch: `git push origin feature/amazing-feature`
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
 ## 📄 License
 
-This project is licensed under the UNLICENSED License - see the [LICENSE](LICENSE) file for details.
+This project is proprietary and confidential.
 
-## 🆘 Support
+## 👥 Support
 
-- **Documentation**: This README and inline code comments
-- **Issues**: [GitHub Issues](https://github.com/your-username/soulsync-backend/issues)
-- **Email**: support@soulsync.solutions
-
-## 📚 Related Projects
-
-- **Frontend**: [SoulSync Frontend](https://github.com/your-username/soulsync-frontend)
-- **Mobile App**: [SoulSync Mobile](https://github.com/your-username/soulsync-mobile)
-
-## 🏆 Deployment Checklist
-
-### Pre-Deployment
-- [ ] Environment variables configured
-- [ ] Database migrations run
-- [ ] SSL certificates installed
-- [ ] Backup strategy in place
-- [ ] Monitoring setup (optional)
-
-### Production Checklist
-- [ ] NODE_ENV=production
-- [ ] Strong JWT secrets (32+ characters)
-- [ ] CORS configured for production domains
-- [ ] Rate limiting enabled
-- [ ] HTTPS/SSL enabled
-- [ ] Database backups automated
-- [ ] Log rotation configured
-- [ ] Process monitoring (PM2/Docker health checks)
-- [ ] Error tracking (Sentry, optional)
-
-### Security Checklist
-- [ ] Firewall configured
-- [ ] Database access restricted
-- [ ] API rate limiting active
-- [ ] Input validation enabled
-- [ ] Security headers configured
-- [ ] Secrets not in version control
-- [ ] Regular security updates
+For support, email support@soulsync.solutions or open an issue in the repository.
 
 ---
 
-**Made with ❤️ for SoulSync - Connecting Hearts Through Spiritual Harmony**
+Made with ❤️ by the SoulSync Team

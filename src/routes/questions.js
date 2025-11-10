@@ -2,6 +2,12 @@ import express from 'express';
 import { body, validationResult, query as queryValidator } from 'express-validator';
 import prisma from '../database/connection.js';
 import { authenticateToken, optionalAuth } from '../middleware/auth.js';
+import { 
+  getPersonalizedQuestions, 
+  getQuestionsByCategory as getPersonalizedCategoryQuestions,
+  getHighImpactQuestions,
+  calculatePersonalityProfile 
+} from '../services/personalizedQuestions.js';
 
 const router = express.Router();
 
@@ -571,190 +577,28 @@ router.get('/category/:category', optionalAuth, [
   }
 });
 
-// PRODUCTION SYNC ENDPOINT - Add missing questions to database
+// DYNAMIC SYNC ENDPOINT - Sync frontend question bank with database
 router.post('/sync', async (req, res) => {
   try {
-    console.log('🔄 Starting production question sync...');
+    console.log('🔄 Starting dynamic question sync from frontend question bank...');
     
-    // Complete question bank that needs to be synced
-    const allQuestions = [
-      {
-        id: 'communication_style',
-        category: 'communication',
-        question: "Your communication style is:",
-        type: 'multiple',
-        emoji: '💬',
-        weight: 8,
-        options: [
-          { value: 'direct', label: 'Direct and honest', emoji: '🎯' },
-          { value: 'gentle', label: 'Gentle and thoughtful', emoji: '🌸' },
-          { value: 'playful', label: 'Playful and humorous', emoji: '😄' },
-          { value: 'deep', label: 'Deep and meaningful', emoji: '🌊' }
-        ]
-      },
-      {
-        id: 'life_goals',
-        category: 'values',
-        question: "Your biggest life goal is:",
-        type: 'multiple',
-        emoji: '🎯',
-        weight: 9,
-        options: [
-          { value: 'career', label: 'Career success', emoji: '💼' },
-          { value: 'family', label: 'Building a family', emoji: '👨‍👩‍👧‍👦' },
-          { value: 'travel', label: 'Exploring the world', emoji: '🌍' },
-          { value: 'impact', label: 'Making a difference', emoji: '🌟' },
-          { value: 'growth', label: 'Personal growth', emoji: '🌱' }
-        ]
-      },
-      {
-        id: 'love_language',
-        category: 'personality',
-        question: "What's your primary love language?",
-        type: 'multiple',
-        emoji: '💕',
-        weight: 9,
-        options: [
-          { value: 'words', label: 'Words of Affirmation', emoji: '💬' },
-          { value: 'quality', label: 'Quality Time', emoji: '⏰' },
-          { value: 'gifts', label: 'Receiving Gifts', emoji: '🎁' },
-          { value: 'touch', label: 'Physical Touch', emoji: '🤗' },
-          { value: 'service', label: 'Acts of Service', emoji: '🤝' }
-        ]
-      },
-      {
-        id: 'ideal_sunday',
-        category: 'lifestyle',
-        question: "Describe your ideal Sunday:",
-        type: 'multiple',
-        emoji: '☀️',
-        weight: 7,
-        options: [
-          { value: 'adventure', label: 'Outdoor Adventure', emoji: '🏔️' },
-          { value: 'cozy', label: 'Cozy Home Vibes', emoji: '🏠' },
-          { value: 'social', label: 'Friends & Family', emoji: '👥' },
-          { value: 'cultural', label: 'Museums & Art', emoji: '🎨' },
-          { value: 'active', label: 'Sports & Fitness', emoji: '💪' }
-        ]
-      },
-      {
-        id: 'red_flag',
-        category: 'values',
-        question: "What's your biggest red flag in dating?",
-        type: 'multiple',
-        emoji: '🚩',
-        weight: 10,
-        options: [
-          { value: 'dishonesty', label: 'Dishonesty', emoji: '🤥' },
-          { value: 'selfish', label: 'Self-Centered', emoji: '🪞' },
-          { value: 'lazy', label: 'No Ambition', emoji: '😴' },
-          { value: 'rude', label: 'Rude to Service Staff', emoji: '😤' },
-          { value: 'phone', label: 'Always on Phone', emoji: '📱' }
-        ]
-      },
-      {
-        id: 'relationship_goal',
-        category: 'relationship',
-        question: "What do you want in your next relationship?",
-        type: 'multiple',
-        emoji: '💫',
-        weight: 10,
-        options: [
-          { value: 'serious', label: 'Something Serious', emoji: '💍' },
-          { value: 'fun', label: 'Fun & Casual', emoji: '🎉' },
-          { value: 'growth', label: 'Personal Growth', emoji: '🌱' },
-          { value: 'adventure', label: 'Adventure Partner', emoji: '✈️' },
-          { value: 'stability', label: 'Stability & Comfort', emoji: '🏡' }
-        ]
-      },
-      {
-        id: 'conflict_style',
-        category: 'communication',
-        question: "How do you handle conflict in relationships?",
-        type: 'multiple',
-        emoji: '🤝',
-        weight: 9,
-        options: [
-          { value: 'direct', label: 'Address it head-on', emoji: '💪' },
-          { value: 'avoid', label: 'Give space, then discuss', emoji: '🌸' },
-          { value: 'compromise', label: 'Find middle ground', emoji: '⚖️' },
-          { value: 'listen', label: 'Listen first, then respond', emoji: '👂' }
-        ]
-      },
-      {
-        id: 'spontaneity',
-        category: 'personality',
-        question: "Are you more spontaneous or planned?",
-        type: 'scale',
-        emoji: '🎲',
-        weight: 6,
-        min: 1,
-        max: 10,
-        labels: ['Very Planned', 'Very Spontaneous']
-      },
-      {
-        id: 'humor_style',
-        category: 'personality',
-        question: "What's your sense of humor like?",
-        type: 'multiple',
-        emoji: '😂',
-        weight: 7,
-        options: [
-          { value: 'witty', label: 'Witty and clever', emoji: '🧠' },
-          { value: 'silly', label: 'Silly and goofy', emoji: '🤪' },
-          { value: 'sarcastic', label: 'Sarcastic and dry', emoji: '😏' },
-          { value: 'wholesome', label: 'Wholesome and clean', emoji: '😊' },
-          { value: 'dark', label: 'Dark and edgy', emoji: '🖤' }
-        ]
-      },
-      {
-        id: 'pet_preference',
-        category: 'lifestyle',
-        question: "What's your relationship with pets?",
-        type: 'multiple',
-        emoji: '🐕',
-        weight: 6,
-        options: [
-          { value: 'dog_lover', label: 'Dog lover', emoji: '🐕' },
-          { value: 'cat_lover', label: 'Cat lover', emoji: '🐱' },
-          { value: 'both', label: 'Love all animals', emoji: '🐾' },
-          { value: 'allergic', label: 'Allergic to pets', emoji: '🤧' },
-          { value: 'no_pets', label: 'Prefer no pets', emoji: '🚫' }
-        ]
-      },
-      {
-        id: 'social_battery',
-        category: 'personality',
-        question: "How would you describe your social energy?",
-        type: 'scale',
-        emoji: '🔋',
-        weight: 8,
-        min: 1,
-        max: 10,
-        labels: ['Introvert', 'Extrovert']
-      },
-      {
-        id: 'future_goals',
-        category: 'values',
-        question: "What's most important for your future?",
-        type: 'multiple',
-        emoji: '🌟',
-        weight: 9,
-        options: [
-          { value: 'career', label: 'Career success', emoji: '💼' },
-          { value: 'family', label: 'Family and relationships', emoji: '👨‍👩‍👧‍👦' },
-          { value: 'travel', label: 'Travel and experiences', emoji: '✈️' },
-          { value: 'stability', label: 'Financial stability', emoji: '💰' },
-          { value: 'impact', label: 'Making a difference', emoji: '🌍' }
-        ]
-      }
-    ];
+    // Import the complete frontend question bank
+    const frontendQuestionBank = req.body.questions || [];
+    
+    if (!frontendQuestionBank.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'No questions provided in request body. Send questions array in request body.'
+      });
+    }
+    
+    console.log(`📝 Received ${frontendQuestionBank.length} questions from frontend`);
     
     let addedCount = 0;
     let updatedCount = 0;
     let skippedCount = 0;
 
-    for (const questionData of allQuestions) {
+    for (const questionData of frontendQuestionBank) {
       try {
         // Check if question already exists
         const existingQuestion = await prisma.question.findUnique({
@@ -771,7 +615,8 @@ router.post('/sync', async (req, res) => {
           isActive: true,
           options: questionData.options || [],
           minValue: questionData.min || null,
-          maxValue: questionData.max || null
+          maxValue: questionData.max || null,
+          labels: questionData.labels || null
         };
 
         if (existingQuestion) {
@@ -807,7 +652,7 @@ router.post('/sync', async (req, res) => {
         added: addedCount,
         updated: updatedCount,
         skipped: skippedCount,
-        total: allQuestions.length
+        total: frontendQuestionBank.length
       },
       verification: {
         life_goals: !!verifications[0],
@@ -825,6 +670,83 @@ router.post('/sync', async (req, res) => {
       success: false, 
       message: 'Question sync failed',
       error: error.message 
+    });
+  }
+});
+
+// Get personalized next questions for optimal matching
+router.get('/personalized', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { limit = 5 } = req.query;
+
+    console.log(`🎯 Getting personalized questions for user ${userId}`);
+
+    const result = await getPersonalizedQuestions(userId, parseInt(limit));
+
+    res.json({
+      success: true,
+      data: result,
+      message: `Here are ${result.questions.length} personalized questions to boost your matching potential by ${result.analytics.improvementPotential}%`
+    });
+
+  } catch (error) {
+    console.error('❌ Get personalized questions error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get personalized questions'
+    });
+  }
+});
+
+// Get high-impact questions for maximum matching improvement
+router.get('/high-impact', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { limit = 5 } = req.query;
+
+    console.log(`💎 Getting high-impact questions for user ${userId}`);
+
+    const questions = await getHighImpactQuestions(userId, parseInt(limit));
+
+    res.json({
+      success: true,
+      data: {
+        questions,
+        impact: `These ${questions.length} questions will maximize your matching accuracy`
+      },
+      message: 'High-impact questions for optimal matching'
+    });
+
+  } catch (error) {
+    console.error('❌ Get high-impact questions error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get high-impact questions'
+    });
+  }
+});
+
+// Get user's personality profile and insights
+router.get('/profile/insights', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    console.log(`🧬 Getting personality profile insights for user ${userId}`);
+
+    const profile = await calculatePersonalityProfile(userId);
+
+    res.json({
+      success: true,
+      data: profile,
+      message: `Your profile is ${profile.completionPercentage}% complete across ${Object.keys(profile.categoryScores).length} categories`
+    });
+
+  } catch (error) {
+    console.error('❌ Get personality profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get personality profile'
     });
   }
 });
