@@ -2,6 +2,7 @@ import express from 'express';
 import { query as queryValidator } from 'express-validator';
 import { authenticateToken } from '../middleware/auth.js';
 import { getAllCities, searchCities, calculateDistance } from '../data/locationData.js';
+import { geocodeAddress, autocomplete as geoAutocomplete } from '../services/geocodingService.js';
 
 const router = express.Router();
 
@@ -142,3 +143,33 @@ router.get('/stats', async (req, res) => {
 });
 
 export default router;
+ 
+// Address validation endpoint
+router.post('/validate', authenticateToken, async (req, res) => {
+  try {
+    const { address } = req.body || {};
+    if (!address || address.length < 3) {
+      return res.status(400).json({ success: false, message: 'Address is required' });
+    }
+    const result = await geocodeAddress(address);
+    return res.status(result.success ? 200 : 422).json(result);
+  } catch (error) {
+    console.error('Validate address error:', error);
+    res.status(500).json({ success: false, message: 'Failed to validate address' });
+  }
+});
+
+// Autocomplete endpoint
+router.get('/autocomplete', authenticateToken, async (req, res) => {
+  try {
+    const { query } = req.query;
+    if (!query || String(query).length < 2) {
+      return res.status(400).json({ success: false, message: 'Query too short' });
+    }
+    const result = await geoAutocomplete(String(query));
+    return res.status(result.success ? 200 : 422).json(result);
+  } catch (error) {
+    console.error('Autocomplete error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch suggestions' });
+  }
+});

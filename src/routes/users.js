@@ -1,5 +1,5 @@
 import express from 'express';
-import { body, validationResult } from 'express-validator';
+import { body, validationResult, query as queryValidator } from 'express-validator';
 import prisma from '../database/connection.js';
 import { authenticateToken, requireProfile } from '../middleware/auth.js';
 import { findCompatibleMatches, calculateCompatibilityScore, getMatchExplanation } from '../services/matchingAlgorithm.js';
@@ -66,6 +66,11 @@ router.put('/profile', authenticateToken, [
   body('age').optional().isInt({ min: 18, max: 100 }),
   body('bio').optional().trim().isLength({ max: 500 }),
   body('location').optional().trim().isLength({ max: 100 }),
+  body('city').optional().trim().isLength({ max: 100 }),
+  body('state').optional().trim().isLength({ max: 100 }),
+  body('country').optional().trim().isLength({ max: 100 }),
+  body('latitude').optional().isFloat({ min: -90, max: 90 }),
+  body('longitude').optional().isFloat({ min: -180, max: 180 }),
   body('interests').optional().isArray(),
   body('photos').optional().isArray(),
   body('gender').optional().isIn(['male', 'female', 'non-binary', 'other', 'prefer-not-to-say']),
@@ -82,7 +87,7 @@ router.put('/profile', authenticateToken, [
     }
 
     const userId = req.user.id;
-    const { name, age, bio, location, interests, photos, gender, lookingFor } = req.body;
+  const { name, age, bio, location, interests, photos, gender, lookingFor, city, state, country, latitude, longitude } = req.body;
 
     // Build update data object
     const updateData = {};
@@ -90,6 +95,11 @@ router.put('/profile', authenticateToken, [
     if (age !== undefined) updateData.age = age;
     if (bio !== undefined) updateData.bio = bio;
     if (location !== undefined) updateData.location = location;
+  if (city !== undefined) updateData.city = city;
+  if (state !== undefined) updateData.state = state;
+  if (country !== undefined) updateData.country = country;
+  if (latitude !== undefined) updateData.latitude = latitude;
+  if (longitude !== undefined) updateData.longitude = longitude;
     if (interests !== undefined) updateData.interests = interests;
     if (photos !== undefined) updateData.photos = photos;
     if (gender !== undefined) updateData.gender = gender;
@@ -112,6 +122,11 @@ router.put('/profile', authenticateToken, [
         age: true,
         bio: true,
         location: true,
+        city: true,
+        state: true,
+        country: true,
+        latitude: true,
+        longitude: true,
         gender: true,
         lookingFor: true,
         interests: true,
@@ -147,6 +162,90 @@ router.put('/profile', authenticateToken, [
       success: false,
       message: 'Failed to update profile'
     });
+  }
+});
+
+// Nearby users by distance (km)
+router.get('/nearby', authenticateToken, [
+  queryValidator('lat').optional().isFloat({ min: -90, max: 90 }),
+  queryValidator('lng').optional().isFloat({ min: -180, max: 180 }),
+  queryValidator('radius').optional().isInt({ min: 1, max: 500 }).default(50),
+  queryValidator('limit').optional().isInt({ min: 1, max: 100 }).default(20),
+  queryValidator('offset').optional().isInt({ min: 0, max: 1000 }).default(0)
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: 'Validation failed', errors: errors.array() });
+    }
+
+    const userId = req.user.id;
+    const limit = parseInt(req.query.limit || '20', 10);
+    const offset = parseInt(req.query.offset || '0', 10);
+    const radius = parseInt(req.query.radius || '50', 10);
+
+    // Load current user if lat/lng not provided
+    let lat = req.query.lat ? parseFloat(String(req.query.lat)) : undefined;
+    let lng = req.query.lng ? parseFloat(String(req.query.lng)) : undefined;
+    if (lat === undefined || lng === undefined) {
+      const me = await prisma.user.findUnique({ where: { id: userId }, select: { latitude: true, longitude: true } });
+      lat = me?.latitude ?? lat;
+      lng = me?.longitude ?? lng;
+    }
+
+    if (lat === undefined || lng === undefined) {
+      return res.status(400).json({ success: false, message: 'Location not provided and not set on profile' });
+    }
+
+    // Fetch candidate users with coordinates
+    const candidates = await prisma.user.findMany({
+      where: {
+        id: { not: userId },
+        isActive: true,
+        isVerified: true,
+        latitude: { not: null },
+        longitude: { not: null }
+      },
+      select: {
+        id: true, name: true, age: true, bio: true, location: true,
+        city: true, state: true, country: true, latitude: true, longitude: true,
+        interests: true, photos: true
+      },
+      take: 1000 // cap to avoid heavy processing
+    });
+
+    // Calculate distances
+    const toRad = (v) => v * Math.PI / 180;
+    const R = 6371;
+    const dist = (la1, lo1, la2, lo2) => {
+      const dLat = toRad(la2 - la1);
+      const dLon = toRad(lo2 - lo1);
+      const a = Math.sin(dLat/2) ** 2 + Math.cos(toRad(la1)) * Math.cos(toRad(la2)) * Math.sin(dLon/2) ** 2;
+      return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    };
+
+    const withDistance = candidates.map(u => ({
+      ...u,
+      distanceKm: dist(lat, lng, u.latitude, u.longitude)
+    }))
+    .filter(u => u.distanceKm <= radius)
+    .sort((a, b) => a.distanceKm - b.distanceKm);
+
+    const page = withDistance.slice(offset, offset + limit);
+
+    res.json({
+      success: true,
+      data: {
+        center: { lat, lng },
+        radius,
+        total: withDistance.length,
+        users: page
+      },
+      pagination: { limit, offset, hasMore: withDistance.length > offset + limit }
+    });
+  } catch (error) {
+    console.error('Get nearby users error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch nearby users' });
   }
 });
 
