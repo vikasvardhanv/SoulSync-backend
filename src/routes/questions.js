@@ -358,7 +358,7 @@ router.post('/:id/answer', authenticateToken, [
     const { answer } = req.body;
     const userId = req.user.id;
 
-    console.log(`📝 User ${userId} answering question ${questionId}`);
+    console.log(`📝 User ${userId} answering question ${questionId} with answer:`, answer);
 
     // Check if question exists and is active
     const question = await prisma.question.findFirst({
@@ -369,16 +369,35 @@ router.post('/:id/answer', authenticateToken, [
     });
 
     if (!question) {
+      console.error(`❌ Question not found: ${questionId}`);
       return res.status(404).json({
         success: false,
-        message: 'Question not found'
+        message: `Question with ID "${questionId}" not found. Please ensure questions are synced from frontend.`,
+        hint: 'Use POST /api/questions/sync with the question bank to sync missing questions'
       });
     }
 
     // Validate answer based on question type
     if (question.type === 'scale') {
       const value = parseInt(answer);
+      
+      // Check if question has required minValue and maxValue
+      if (question.minValue === null || question.maxValue === null) {
+        console.error(`❌ Scale question ${questionId} is missing minValue/maxValue:`, {
+          minValue: question.minValue,
+          maxValue: question.maxValue
+        });
+        return res.status(500).json({
+          success: false,
+          message: 'Question configuration error: missing min/max values',
+          hint: 'This question needs to be synced with proper min/max values'
+        });
+      }
+      
+      console.log(`🔍 Validating scale answer: value=${value}, min=${question.minValue}, max=${question.maxValue}`);
+      
       if (isNaN(value) || value < question.minValue || value > question.maxValue) {
+        console.warn(`❌ Scale validation failed: ${value} not in range [${question.minValue}, ${question.maxValue}]`);
         return res.status(400).json({
           success: false,
           message: `Answer must be between ${question.minValue} and ${question.maxValue}`
@@ -386,13 +405,18 @@ router.post('/:id/answer', authenticateToken, [
       }
     } else if (question.type === 'multiple') {
       const validOptions = question.options.map(opt => opt.value);
+      console.log(`🔍 Validating multiple choice: answer="${answer}", validOptions=[${validOptions.join(', ')}]`);
+      
       if (!validOptions.includes(answer)) {
+        console.warn(`❌ Multiple choice validation failed: "${answer}" not in valid options`);
         return res.status(400).json({
           success: false,
           message: 'Invalid option selected'
         });
       }
     }
+
+    console.log(`✅ Question validated, upserting answer for user ${userId}`);
 
     // Upsert the answer (create or update)
     const userAnswer = await prisma.userAnswer.upsert({
@@ -403,15 +427,17 @@ router.post('/:id/answer', authenticateToken, [
         }
       },
       update: {
-        answer,
+        answer: String(answer),
         updatedAt: new Date()
       },
       create: {
         userId,
         questionId,
-        answer
+        answer: String(answer)
       }
     });
+
+    console.log(`✅ Answer saved successfully for question ${questionId}`);
 
     // Get updated progress stats
     const totalAnswered = await prisma.userAnswer.count({
@@ -421,6 +447,8 @@ router.post('/:id/answer', authenticateToken, [
     const totalQuestions = await prisma.question.count({
       where: { isActive: true }
     });
+
+    console.log(`📊 User progress: ${totalAnswered}/${totalQuestions} questions answered`);
 
     // Calculate matching improvement
     const matchingReadiness = Math.min(100, Math.round((totalAnswered / 20) * 100));
@@ -462,9 +490,11 @@ router.post('/:id/answer', authenticateToken, [
 
   } catch (error) {
     console.error('❌ Submit answer error:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
-      message: 'Failed to submit answer'
+      message: 'Failed to submit answer',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });

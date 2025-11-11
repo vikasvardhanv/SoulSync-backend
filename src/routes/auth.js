@@ -877,6 +877,11 @@ router.put('/change-password', authenticateToken, [
         age: true,
         bio: true,
         location: true,
+        city: true,
+        state: true,
+        country: true,
+        latitude: true,
+        longitude: true,
         gender: true,
         lookingFor: true,
         interests: true,
@@ -901,6 +906,27 @@ router.put('/change-password', authenticateToken, [
     });
     const totalQuestions = 50;
     const personalityScore = Math.min(100, Math.round((answersCount / totalQuestions) * 100));
+
+    // Check if user has active premium subscription
+    const activeSubscription = await prisma.subscription.findFirst({
+      where: {
+        userId: user.id,
+        status: 'active',
+        expiresAt: {
+          gt: new Date() // Greater than now = not expired
+        }
+      },
+      orderBy: {
+        expiresAt: 'desc' // Get the longest-running subscription
+      }
+    });
+
+    const hasPremium = !!activeSubscription;
+    const subscriptionDetails = activeSubscription ? {
+      plan: activeSubscription.plan,
+      expiresAt: activeSubscription.expiresAt,
+      status: activeSubscription.status
+    } : null;
  
     const response = {
       success: true,
@@ -908,7 +934,9 @@ router.put('/change-password', authenticateToken, [
         user: {
           ...user,
           personalityScore,
-          questionsAnswered: answersCount
+          questionsAnswered: answersCount,
+          hasPremium,
+          subscription: subscriptionDetails
         }
       }
     };
