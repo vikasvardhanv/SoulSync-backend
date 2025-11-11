@@ -84,7 +84,7 @@ export async function findEnhancedMatches(userId, limit = 10, filters = {}) {
   console.log(`🎯 Finding enhanced matches for user ${userId} (limit: ${limit})`);
 
   try {
-    // Get current user's profile and answers
+    // Get current user's profile, answers, and preferences
     const currentUser = await prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -93,8 +93,17 @@ export async function findEnhancedMatches(userId, limit = 10, filters = {}) {
         gender: true,
         lookingFor: true,
         city: true,
+        state: true,
+        country: true,
         latitude: true,
-        longitude: true
+        longitude: true,
+        matchPreference: {
+          select: {
+            minAge: true,
+            maxAge: true,
+            maxDistance: true
+          }
+        }
       }
     });
 
@@ -114,7 +123,7 @@ export async function findEnhancedMatches(userId, limit = 10, filters = {}) {
       };
     }
 
-    // Build potential matches query based on user preferences (reciprocal filtering)
+    // Build potential matches query based on user preferences
     const potentialMatchesWhere = {
       id: { not: userId },
       isActive: true,
@@ -123,11 +132,13 @@ export async function findEnhancedMatches(userId, limit = 10, filters = {}) {
       ...(currentUser.lookingFor && currentUser.lookingFor !== 'everyone' ? { gender: currentUser.lookingFor } : {})
     };
 
-    // Apply age filters if provided
-    if (filters.minAge || filters.maxAge) {
+    // Apply age filters from match preference or filters
+    const minAge = filters.minAge || currentUser.matchPreference?.minAge;
+    const maxAge = filters.maxAge || currentUser.matchPreference?.maxAge;
+    if (minAge || maxAge) {
       potentialMatchesWhere.age = {};
-      if (filters.minAge) potentialMatchesWhere.age.gte = parseInt(filters.minAge);
-      if (filters.maxAge) potentialMatchesWhere.age.lte = parseInt(filters.maxAge);
+      if (minAge) potentialMatchesWhere.age.gte = parseInt(minAge);
+      if (maxAge) potentialMatchesWhere.age.lte = parseInt(maxAge);
     }
 
     // Get potential matches
@@ -140,6 +151,8 @@ export async function findEnhancedMatches(userId, limit = 10, filters = {}) {
         bio: true,
         location: true,
         city: true,
+        state: true,
+        country: true,
         latitude: true,
         longitude: true,
         interests: true,
@@ -153,6 +166,21 @@ export async function findEnhancedMatches(userId, limit = 10, filters = {}) {
 
     console.log(`🔍 Found ${potentialMatches.length} potential matches`);
 
+    // Calculate distance helper (Haversine formula)
+    const calculateDistance = (lat1, lon1, lat2, lon2) => {
+      if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+      const R = 6371; // Earth radius in km
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                Math.sin(dLon / 2) ** 2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c; // Distance in km
+    };
+
+    const toRad = (deg) => deg * (Math.PI / 180);
+
     // Calculate compatibility for each potential match
     const matchesWithCompatibility = [];
     
@@ -161,14 +189,30 @@ export async function findEnhancedMatches(userId, limit = 10, filters = {}) {
       if (match.lookingFor && match.lookingFor !== 'everyone' && currentUser.gender && match.lookingFor !== currentUser.gender) {
         continue; // Skip non-reciprocal preference
       }
+
       try {
         const compatibility = await calculateEnhancedCompatibility(userId, match.id);
         
         // Only include matches with meaningful compatibility scores
         if (compatibility.compatibilityScore > 0 && compatibility.confidence > 0.2) {
+          // Calculate distance if both have coordinates
+          const distance = calculateDistance(
+            currentUser.latitude,
+            currentUser.longitude,
+            match.latitude,
+            match.longitude
+          );
+
+          // Apply distance filter if set
+          const maxDistance = currentUser.matchPreference?.maxDistance;
+          if (maxDistance && distance && distance > maxDistance) {
+            continue; // Skip if too far
+          }
+
           matchesWithCompatibility.push({
             ...match,
-            compatibility
+            compatibility,
+            distance: distance ? Math.round(distance) : null
           });
         }
       } catch (error) {
@@ -176,20 +220,32 @@ export async function findEnhancedMatches(userId, limit = 10, filters = {}) {
       }
     }
 
-    // Sort by compatibility score (descending)
+    // Sort by: 1) compatibility score, 2) distance (closer first)
     const sortedMatches = matchesWithCompatibility
-      .sort((a, b) => b.compatibility.compatibilityScore - a.compatibility.compatibilityScore)
+      .sort((a, b) => {
+        // Primary sort: compatibility
+        const compatDiff = b.compatibility.compatibilityScore - a.compatibility.compatibilityScore;
+        if (Math.abs(compatDiff) > 0.5) return compatDiff;
+
+        // Secondary sort: distance (null last)
+        if (a.distance === null && b.distance === null) return 0;
+        if (a.distance === null) return 1;
+        if (b.distance === null) return -1;
+        return a.distance - b.distance;
+      })
       .slice(0, limit);
 
     console.log(`✨ Returning ${sortedMatches.length} enhanced matches`);
 
     return {
       matches: sortedMatches,
-      algorithm: 'enhanced_ai_matching',
+      algorithm: 'enhanced_ai_matching_with_proximity',
       totalAnalyzed: potentialMatches.length,
       userProfile: {
         answersCount: userAnswers.length,
-        profileStrength: calculateProfileStrength(userAnswers.length)
+        profileStrength: calculateProfileStrength(userAnswers.length),
+        hasLocation: !!(currentUser.latitude && currentUser.longitude),
+        ageRange: { min: minAge || 18, max: maxAge || 100 }
       }
     };
 

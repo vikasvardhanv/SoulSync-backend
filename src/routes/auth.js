@@ -34,6 +34,32 @@ const validateRegistration = [
   body('lookingFor')
     .isIn(['male','female','non-binary','everyone'])
     .withMessage('Please select who you are looking for'),
+  body('minAge')
+    .optional()
+    .isInt({ min: 18, max: 100 })
+    .withMessage('Minimum age must be between 18 and 100'),
+  body('maxAge')
+    .optional()
+    .isInt({ min: 18, max: 100 })
+    .withMessage('Maximum age must be between 18 and 100'),
+  body('city')
+    .optional()
+    .trim()
+    .isLength({ max: 100 }),
+  body('state')
+    .optional()
+    .trim()
+    .isLength({ max: 100 }),
+  body('country')
+    .optional()
+    .trim()
+    .isLength({ max: 100 }),
+  body('latitude')
+    .optional()
+    .isFloat({ min: -90, max: 90 }),
+  body('longitude')
+    .optional()
+    .isFloat({ min: -180, max: 180 }),
   body('bio')
     .optional()
     .trim()
@@ -146,9 +172,7 @@ router.post('/register', validateRegistration, async (req, res, next) => {
       });
     }
 
-  const { email, password, name, age, gender, lookingFor, bio, location, interests, photos } = req.body;
-
-    // Check if user already exists
+    const { email, password, name, age, gender, lookingFor, minAge, maxAge, city, state, country, latitude, longitude, bio, location, interests, photos } = req.body;    // Check if user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email }
     });
@@ -191,6 +215,11 @@ router.post('/register', validateRegistration, async (req, res, next) => {
         age: parseInt(age),
         gender,
         lookingFor,
+        city: city || null,
+        state: state || null,
+        country: country || null,
+        latitude: latitude ? parseFloat(latitude) : null,
+        longitude: longitude ? parseFloat(longitude) : null,
         bio: bio || null,
         location: location || null,
         interests: processedInterests,
@@ -205,6 +234,11 @@ router.post('/register', validateRegistration, async (req, res, next) => {
         age: true,
         gender: true,
         lookingFor: true,
+        city: true,
+        state: true,
+        country: true,
+        latitude: true,
+        longitude: true,
         bio: true,
         location: true,
         interests: true,
@@ -217,6 +251,23 @@ router.post('/register', validateRegistration, async (req, res, next) => {
 
     authLogger('REGISTRATION_SUCCESS', user.id, { email: user.email, name: user.name });
     dbLogger('CREATE', 'users', { userId: user.id, email: user.email });
+
+    // Create match preference if age range provided
+    if (minAge || maxAge) {
+      try {
+        await prisma.matchPreference.create({
+          data: {
+            userId: user.id,
+            minAge: minAge ? parseInt(minAge) : 18,
+            maxAge: maxAge ? parseInt(maxAge) : 100,
+            preferredGender: lookingFor !== 'everyone' ? lookingFor : null
+          }
+        });
+      } catch (prefError) {
+        console.error('Failed to create match preference:', prefError);
+        // Don't fail registration if preference creation fails
+      }
+    }
 
     // Generate verification token
     const verificationToken = EmailService.generateVerificationToken(user.id);
