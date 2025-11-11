@@ -114,17 +114,14 @@ export async function findEnhancedMatches(userId, limit = 10, filters = {}) {
       };
     }
 
-    // Build potential matches query based on user preferences
+    // Build potential matches query based on user preferences (reciprocal filtering)
     const potentialMatchesWhere = {
       id: { not: userId },
       isActive: true,
-      isVerified: true
+      isVerified: true,
+      // If user specified a lookingFor (not everyone), target's gender must match
+      ...(currentUser.lookingFor && currentUser.lookingFor !== 'everyone' ? { gender: currentUser.lookingFor } : {})
     };
-
-    // Apply gender preference filter
-    if (currentUser.lookingFor && currentUser.lookingFor !== 'everyone') {
-      potentialMatchesWhere.gender = currentUser.lookingFor;
-    }
 
     // Apply age filters if provided
     if (filters.minAge || filters.maxAge) {
@@ -148,6 +145,7 @@ export async function findEnhancedMatches(userId, limit = 10, filters = {}) {
         interests: true,
         photos: true,
         gender: true,
+        lookingFor: true,
         createdAt: true
       },
       take: limit * 3 // Get more to allow for filtering
@@ -159,6 +157,10 @@ export async function findEnhancedMatches(userId, limit = 10, filters = {}) {
     const matchesWithCompatibility = [];
     
     for (const match of potentialMatches) {
+      // Enforce reciprocal preference: if the other user has a lookingFor value (not everyone) ensure it matches current user's gender
+      if (match.lookingFor && match.lookingFor !== 'everyone' && currentUser.gender && match.lookingFor !== currentUser.gender) {
+        continue; // Skip non-reciprocal preference
+      }
       try {
         const compatibility = await calculateEnhancedCompatibility(userId, match.id);
         

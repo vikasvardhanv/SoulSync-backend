@@ -28,6 +28,12 @@ const validateRegistration = [
   body('age')
     .isInt({ min: 18, max: 100 })
     .withMessage('Age must be between 18 and 100'),
+  body('gender')
+    .isIn(['male','female','non-binary','other','prefer-not-to-say'])
+    .withMessage('Please select a valid gender'),
+  body('lookingFor')
+    .isIn(['male','female','non-binary','everyone'])
+    .withMessage('Please select who you are looking for'),
   body('bio')
     .optional()
     .trim()
@@ -140,7 +146,7 @@ router.post('/register', validateRegistration, async (req, res, next) => {
       });
     }
 
-    const { email, password, name, age, bio, location, interests, photos } = req.body;
+  const { email, password, name, age, gender, lookingFor, bio, location, interests, photos } = req.body;
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
@@ -183,6 +189,8 @@ router.post('/register', validateRegistration, async (req, res, next) => {
         password: passwordHash,
         name,
         age: parseInt(age),
+        gender,
+        lookingFor,
         bio: bio || null,
         location: location || null,
         interests: processedInterests,
@@ -195,6 +203,8 @@ router.post('/register', validateRegistration, async (req, res, next) => {
         email: true,
         name: true,
         age: true,
+        gender: true,
+        lookingFor: true,
         bio: true,
         location: true,
         interests: true,
